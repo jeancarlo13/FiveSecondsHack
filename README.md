@@ -72,8 +72,8 @@ docker compose down
 ```
 
 The container runs both processes:
-- `python main.py --serve` — status HTTP server (always on)
-- `python main.py` in a loop every 60 s — scheduler / sender
+- `python src/main.py --serve` — status HTTP server (always on)
+- `python src/main.py` in a loop every 60 s — scheduler / sender
 
 ## 🖥️ Running Locally
 
@@ -83,14 +83,26 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # Start status server in background
-python main.py --serve &
+python src/main.py --serve &
 
 # Run the bot once
-python main.py
+python src/main.py
 
 # Force send (bypass schedule and history)
-python main.py --force
+python src/main.py --force
 ```
+
+## 🧪 Testing
+
+```bash
+# Install dev dependencies
+pip install -r requirements-dev.txt
+
+# Run tests with coverage report
+python -m pytest
+```
+
+The suite targets **≥95% coverage** (currently at ~99%). Configuration lives in `pytest.ini`.
 
 ## 📊 Status Page
 
@@ -123,8 +135,13 @@ Open `http://localhost:<STATUS_PORT>` to see:
 ## 🗂️ Project Structure
 
 ```
-main.py              # Main orchestrator
-requirements.txt     # Python dependencies
+src/
+  main.py            # Main orchestrator (entry point)
+tests/
+  test_main.py       # 101 tests — 99% coverage
+requirements.txt     # Runtime Python dependencies
+requirements-dev.txt # Dev/test dependencies (pytest, pytest-cov)
+pytest.ini           # Test configuration
 Dockerfile           # Python 3.11-alpine image
 docker-compose.yml   # Service definition with healthcheck
 .env                 # Environment variables (not committed)
