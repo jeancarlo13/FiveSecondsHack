@@ -16,7 +16,7 @@ The bot detects open Code Smells from SonarCloud, fetches the real source contex
 - **Business Day Scheduling:** Next execution is always the next business day (skips weekends); Friday schedules to Monday.
 - **Status HTTP Endpoint:** Lightweight built-in web server (`--serve`) showing scheduler state, last notification sent, and a live HTML preview.
 - **Force Send:** POST `/force` on the status page triggers an immediate run bypassing schedule and history.
-- **State Persistence:** `sonar_state.json` tracks `next_execution`, `history` (last 50 issues), and `last_sent` (including HTML preview).
+- **State Persistence:** `data/sonar_state.json` tracks `next_execution`, `history` (last 50 issues), and `last_sent` (including HTML preview).
 - **Docker-first:** Designed to run as a persistent container with `restart: unless-stopped` and a built-in healthcheck.
 
 ## 🛠️ Environment Variables
@@ -39,7 +39,7 @@ OPENAI_MODEL=gpt-4o-mini                # optional, default: gpt-4o-mini
 AZURE_TENANT_ID=your_tenant_id
 AZURE_CLIENT_ID=your_client_id
 AZURE_CLIENT_SECRET=your_client_secret
-SHAREPOINT_USERNAME=calendar_owner@company.com
+EMAIL_USERNAME=calendar_owner@company.com
 
 # Recipients (comma-separated)
 ALERT_RECIPIENTS=dev1@company.com,dev2@company.com
@@ -58,7 +58,7 @@ STATUS_PORT=8080
 
 ```bash
 # First run — create required local files
-touch sonar_state.json error.log
+touch data/sonar_state.json logs/error.log
 mkdir -p tmp
 
 # Build and start
@@ -115,7 +115,7 @@ Open `http://localhost:<STATUS_PORT>` to see:
 
 ## ⚙️ State File
 
-`sonar_state.json` (auto-created on first run):
+`data/sonar_state.json` (auto-created on first run):
 
 ```json
 {
@@ -135,7 +135,11 @@ Open `http://localhost:<STATUS_PORT>` to see:
 ## 🗂️ Project Structure
 
 ```
-src/
+data/
+    sonar_state.json # Runtime state (not committed)
+logs/
+    error.log        # Error log (not committed)
+src/~~~~
   main.py            # Main orchestrator (entry point)
 tests/
   test_main.py       # 101 tests — 99% coverage
@@ -145,7 +149,5 @@ pytest.ini           # Test configuration
 Dockerfile           # Python 3.11-alpine image
 docker-compose.yml   # Service definition with healthcheck
 .env                 # Environment variables (not committed)
-sonar_state.json     # Runtime state (not committed)
-error.log            # Error log (not committed)
 tmp/                 # Debug JSON dumps per execution
 ```
