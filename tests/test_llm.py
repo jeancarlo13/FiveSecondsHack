@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from src.llm import ask_llm_for_refactor
 
+
 class TestAskLlmForRefactor:
     _VALID_RESPONSE = json.dumps({
         "title": "🚨 Dead Code",

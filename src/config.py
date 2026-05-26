@@ -3,6 +3,9 @@
 Loads environment variables from the .env file at startup and exposes
 shared constants used across all modules.
 """
+
+import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,3 +29,7 @@ SEVERITY_WEIGHTS = {
 # Number of lines of source code to fetch above and below the flagged line.
 # A value of 8 yields a window of 17 lines total (8 + flagged + 8).
 SOURCE_CONTEXT_LINES = 8
+
+# Notification delivery mode: 'broadcast' (one event, all recipients) or
+# 'individual' (one event per recipient, each with a distinct issue).
+ALERT_MODE = os.getenv("ALERT_MODE", "broadcast")

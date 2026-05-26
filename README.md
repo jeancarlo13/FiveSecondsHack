@@ -14,6 +14,7 @@ The bot detects open Code Smells from SonarCloud, fetches the real source contex
 - **Weighted Selection:** Randomly picks an issue not yet in history, weighted by severity (BLOCKER > CRITICAL > MAJOR > MINOR > INFO).
 - **Source Context:** Fetches the actual code lines locally first, then falls back to SonarCloud's `/api/sources/show` API.
 - **AI-Assisted Refactoring:** Queries an LLM (GitHub Models / OpenAI) for a structured JSON response with title, explanation, and suggested code.
+- **Alert Mode Toggle:** `ALERT_MODE=broadcast` (default) sends one event to all recipients; `ALERT_MODE=individual` fetches a **different** SonarCloud issue per recipient and dispatches a separate calendar event to each one.
 - **Microsoft Graph Calendar Event:** Creates a 15-minute calendar event at a random slot within configurable work hours, always in the future.
 - **Business Day Scheduling:** Next execution is always the next business day (skips weekends); Friday schedules to Monday.
 - **Status HTTP Endpoint:** Lightweight built-in web server (`--serve`) showing scheduler state, last notification sent, and a live HTML preview.
@@ -112,6 +113,9 @@ EMAIL_USERNAME=calendar_owner@company.com
 # Recipients — comma-separated; trailing comma is ignored
 ALERT_RECIPIENTS=dev1@company.com,dev2@company.com
 
+# Alert delivery mode: 'broadcast' (one event for all) | 'individual' (one event per recipient, unique issue each)
+ALERT_MODE=broadcast
+
 # Scheduling
 WORK_TIMEZONE=America/Chihuahua        # IANA timezone name
 WORK_DAY_START=09:00                   # events are never created before this
@@ -196,3 +200,5 @@ environment variables and fixes `sys.argv` before any module is imported.
 | `No open Code Smells` with `--force` | All issues are outside the `ISSUE_LOOKBACK_HOURS` window | Increase `ISSUE_LOOKBACK_HOURS` or check SonarCloud |
 | `LLM Inference failed` | Invalid `OPENAI_API_KEY` or quota exceeded | Check the key and model availability |
 | `Microsoft Entra ID Authentication failed` | Wrong `AZURE_*` credentials or missing Graph permissions | Verify app registration and `Calendars.ReadWrite` permission |
+| In `individual` mode, only N-1 events sent | SonarCloud ran out of unique issues for the last recipient | Increase `ISSUE_LOOKBACK_HOURS` or reduce recipient count |
+| `400 Bad Request` on calendar event | Attendee list malformed (e.g. plain string instead of object) | Upgrade to the latest version of `graph.py` / `main.py` |
