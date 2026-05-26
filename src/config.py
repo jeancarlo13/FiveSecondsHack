@@ -33,3 +33,20 @@ SOURCE_CONTEXT_LINES = 8
 # Notification delivery mode: 'broadcast' (one event, all recipients) or
 # 'individual' (one event per recipient, each with a distinct issue).
 ALERT_MODE = os.getenv("ALERT_MODE", "broadcast")
+
+
+def _env_bool(name, default=False):
+    """Parse a boolean environment variable using common truthy/falsey values."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"1", "true", "yes", "y", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
+# If enabled, only issues authored by invited recipients are eligible.
+ISSUE_ONLY_FROM_INVITED = _env_bool("ISSUE_ONLY_FROM_INVITED", False)

@@ -144,7 +144,7 @@ class TestRunBot:
         """Issues without accessible source are skipped; second call returns None → exits."""
         call_count = {"n": 0}
 
-        def fetch_side_effect(history, created_after=None):
+        def fetch_side_effect(history, created_after=None, allowed_authors=None):
             call_count["n"] += 1
             if call_count["n"] == 1:
                 return dict(_SAMPLE_ISSUE)
@@ -287,6 +287,41 @@ class TestRunBot:
         ):
             result = run_bot(force_execution=False)
         assert result is True
+
+    def test_broadcast_mode_passes_invited_authors_when_enabled(self):
+        with (
+            patch("src.main.load_state", return_value=dict(self._PAST_STATE)),
+            patch("src.main.fetch_and_select_sonar_issue", return_value=dict(_SAMPLE_ISSUE)) as mock_fetch,
+            patch("src.main.get_local_source_code", return_value="code"),
+            patch("src.main.ask_llm_for_refactor", return_value=self._llm_response()),
+            patch("src.main.create_graph_calendar_event", return_value=True),
+            patch("src.main.save_state"),
+            patch("src.main.os.makedirs"),
+            patch("builtins.open", mock_open()),
+            patch("src.main.ISSUE_ONLY_FROM_INVITED", True),
+            patch.dict(os.environ, {"ALERT_RECIPIENTS": "dev1@example.com,dev2@example.com"}),
+        ):
+            result = run_bot(force_execution=False)
+        assert result is True
+        assert mock_fetch.call_args.kwargs["allowed_authors"] == ["dev1@example.com", "dev2@example.com"]
+
+    def test_individual_mode_passes_current_recipient_when_enabled(self):
+        with (
+            patch("src.main.load_state", return_value=dict(self._PAST_STATE)),
+            patch("src.main.fetch_and_select_sonar_issue", return_value=dict(_SAMPLE_ISSUE)) as mock_fetch,
+            patch("src.main.get_local_source_code", return_value="code"),
+            patch("src.main.ask_llm_for_refactor", return_value=self._llm_response()),
+            patch("src.main.create_graph_calendar_event", return_value=True),
+            patch("src.main.save_state"),
+            patch("src.main.os.makedirs"),
+            patch("builtins.open", mock_open()),
+            patch("src.main.ALERT_MODE", "individual"),
+            patch("src.main.ISSUE_ONLY_FROM_INVITED", True),
+            patch.dict(os.environ, {"ALERT_RECIPIENTS": "dev1@example.com"}),
+        ):
+            result = run_bot(force_execution=False)
+        assert result is True
+        assert mock_fetch.call_args.kwargs["allowed_authors"] == ["dev1@example.com"]
 
     def test_friday_schedules_to_monday(self):
         """On a Friday (weekday=4) the next slot should be 3 days ahead."""
@@ -474,7 +509,7 @@ class TestRunBotIndividualMode:
         """Second fetch returns None → only one event sent; result is still True."""
         call_n = {"n": 0}
 
-        def fetch_side(history, created_after=None):
+        def fetch_side(history, created_after=None, allowed_authors=None):
             call_n["n"] += 1
             return dict(self._ISSUE_A) if call_n["n"] == 1 else None
 
