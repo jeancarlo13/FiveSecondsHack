@@ -15,6 +15,7 @@ The bot detects open Code Smells from SonarCloud, fetches the real source contex
 - **Source Context:** Fetches the actual code lines locally first, then falls back to SonarCloud's `/api/sources/show` API.
 - **AI-Assisted Refactoring:** Queries an LLM (GitHub Models / OpenAI) for a structured JSON response with title, explanation, and suggested code.
 - **Alert Mode Toggle:** `ALERT_MODE=broadcast` (default) sends one event to all recipients; `ALERT_MODE=individual` fetches a **different** SonarCloud issue per recipient and dispatches a separate calendar event to each one.
+- **Recipient-Aware Issue Selection:** `ISSUE_ONLY_FROM_INVITED=true` restricts selection to issues authored by invited recipients; when `false`, any author is eligible.
 - **Microsoft Graph Calendar Event:** Creates a 15-minute calendar event at a random slot within configurable work hours, always in the future.
 - **Business Day Scheduling:** Next execution is always the next business day (skips weekends); Friday schedules to Monday.
 - **Status HTTP Endpoint:** Lightweight built-in web server (`--serve`) showing scheduler state, last notification sent, and a live HTML preview.
@@ -115,6 +116,9 @@ ALERT_RECIPIENTS=dev1@company.com,dev2@company.com
 
 # Alert delivery mode: 'broadcast' (one event for all) | 'individual' (one event per recipient, unique issue each)
 ALERT_MODE=broadcast
+
+# When true, only issues authored by invited recipients are eligible
+ISSUE_ONLY_FROM_INVITED=false
 
 # Scheduling
 WORK_TIMEZONE=America/Chihuahua        # IANA timezone name

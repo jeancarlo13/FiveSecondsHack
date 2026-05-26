@@ -46,6 +46,7 @@ class TestStatusHandler:
         written = handler.wfile.write.call_args[0][0].decode("utf-8")
         assert "Five Seconds Hack" in written
         assert "PROJ:src/File.cs" in written
+        assert "v1.1.0" in written
 
     def test_get_shows_preview_when_last_sent(self):
         handler = _make_handler()

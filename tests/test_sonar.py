@@ -84,6 +84,32 @@ class TestFetchAndSelectSonarIssue:
         assert SEVERITY_WEIGHTS["BLOCKER"] > SEVERITY_WEIGHTS["CRITICAL"]
         assert SEVERITY_WEIGHTS["CRITICAL"] > SEVERITY_WEIGHTS["MAJOR"]
 
+    def test_filters_by_allowed_authors_email(self):
+        issues = [
+            {"key": "A", "severity": "MAJOR", "author": "dev1@example.com"},
+            {"key": "B", "severity": "MAJOR", "author": "other@example.com"},
+        ]
+        with patch("src.sonar.requests.get", return_value=self._mock_response(issues)):
+            issue = fetch_and_select_sonar_issue([], allowed_authors=["dev1@example.com"])
+        assert issue is not None
+        assert issue["key"] == "A"
+
+    def test_filters_by_allowed_authors_local_part(self):
+        issues = [
+            {"key": "A", "severity": "MAJOR", "author": "dev1@example.com"},
+            {"key": "B", "severity": "MAJOR", "author": "other@example.com"},
+        ]
+        with patch("src.sonar.requests.get", return_value=self._mock_response(issues)):
+            issue = fetch_and_select_sonar_issue([], allowed_authors=["dev1"])
+        assert issue is not None
+        assert issue["key"] == "A"
+
+    def test_returns_none_when_author_not_invited(self):
+        issues = [{"key": "A", "severity": "MAJOR", "author": "other@example.com"}]
+        with patch("src.sonar.requests.get", return_value=self._mock_response(issues)):
+            issue = fetch_and_select_sonar_issue([], allowed_authors=["dev1@example.com"])
+        assert issue is None
+
 
 class TestFetchSourceFromSonar:
     def test_returns_cleaned_source(self):

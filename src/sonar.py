@@ -16,7 +16,30 @@ from .render import clean_sonar_source
 from .state import log_error
 
 
-def fetch_and_select_sonar_issue(history, created_after=None):
+def _normalize_author(value):
+    """Normalize an author identifier for robust recipient matching."""
+    if not value:
+        return ""
+    return str(value).strip().lower()
+
+
+def _candidate_matches_allowed_authors(issue, allowed_authors):
+    """Return True when an issue author matches one of the allowed recipients."""
+    if not allowed_authors:
+        return True
+
+    issue_author = _normalize_author(issue.get("author"))
+    if not issue_author:
+        return False
+
+    if issue_author in allowed_authors:
+        return True
+
+    issue_local_part = issue_author.split("@")[0]
+    return issue_local_part in allowed_authors
+
+
+def fetch_and_select_sonar_issue(history, created_after=None, allowed_authors=None):
     """Fetch open issues from SonarCloud and pick one at random, weighted by severity.
 
     Paginates through the ``/api/issues/search`` endpoint (up to 500 results per
@@ -28,8 +51,11 @@ def fetch_and_select_sonar_issue(history, created_after=None):
         history: List of issue keys that have already been sent.  Used to
                  filter out already-notified issues.
         created_after: Optional ISO-8601 datetime string.  When supplied, only
-                       issues created after this timestamp are considered
-                       (maps to the ``createdAfter`` SonarCloud parameter).
+                   issues created after this timestamp are considered
+                   (maps to the ``createdAfter`` SonarCloud parameter).
+        allowed_authors: Optional list of recipient identifiers (usually emails).
+                 When provided, only issues whose ``author`` matches one
+                 of these identifiers are considered.
 
     Returns:
         A single issue dict as returned by the SonarCloud API, or ``None``
@@ -64,8 +90,14 @@ def fetch_and_select_sonar_issue(history, created_after=None):
             log_error(f"Failed to fetch issues from SonarCloud (page {page}): {e}")
             break
 
-    # Remove issues already present in the notification history.
-    candidates = [i for i in all_issues if i.get("key") not in history]
+    normalized_allowed_authors = {_normalize_author(a) for a in (allowed_authors or []) if _normalize_author(a)}
+
+    # Remove already-sent issues and, optionally, non-invited authors.
+    candidates = [
+        i
+        for i in all_issues
+        if i.get("key") not in history and _candidate_matches_allowed_authors(i, normalized_allowed_authors)
+    ]
     if not candidates:
         return None
 

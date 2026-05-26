@@ -23,7 +23,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.config import ALERT_MODE, SOURCE_CONTEXT_LINES
+from src.config import ALERT_MODE, ISSUE_ONLY_FROM_INVITED, SOURCE_CONTEXT_LINES
 from src.graph import create_graph_calendar_event
 from src.llm import ask_llm_for_refactor
 from src.render import relative_time, render_code_block
@@ -94,7 +94,7 @@ def _compute_days_to_add(weekday):
     return 1
 
 
-def _fetch_issue_with_source(candidates_history, time_filter):
+def _fetch_issue_with_source(candidates_history, time_filter, allowed_authors=None):
     """Poll SonarCloud until an issue with accessible source code is found.
 
     Iterates through candidates from ``fetch_and_select_sonar_issue``, skipping
@@ -115,7 +115,11 @@ def _fetch_issue_with_source(candidates_history, time_filter):
     """
     skipped_keys = []
     while True:
-        issue = fetch_and_select_sonar_issue(candidates_history + skipped_keys, created_after=time_filter)
+        issue = fetch_and_select_sonar_issue(
+            candidates_history + skipped_keys,
+            created_after=time_filter,
+            allowed_authors=allowed_authors,
+        )
         if not issue:
             return None, None
 
@@ -388,7 +392,8 @@ def _run_individual_mode(state, force_execution, candidates_history, time_filter
     results = []  # list of (success, payload) per recipient
 
     for recipient in recipients:
-        issue, source_line = _fetch_issue_with_source(candidates_history + used_keys, time_filter)
+        allowed_authors = [recipient] if ISSUE_ONLY_FROM_INVITED else None
+        issue, source_line = _fetch_issue_with_source(candidates_history + used_keys, time_filter, allowed_authors)
         if not issue or not source_line:
             print(f"⚠️ No unique issue available for {recipient}, skipping.")
             continue
@@ -494,7 +499,12 @@ def run_bot(force_execution=False):
     if ALERT_MODE == "individual":
         return _run_individual_mode(state, force_execution, candidates_history, time_filter, lookback_hours)
 
-    issue, source_line = _fetch_issue_with_source(candidates_history, time_filter)
+    allowed_authors = None
+    if ISSUE_ONLY_FROM_INVITED:
+        recipients = [r.strip() for r in os.getenv("ALERT_RECIPIENTS", "").split(",") if r.strip()]
+        allowed_authors = recipients
+
+    issue, source_line = _fetch_issue_with_source(candidates_history, time_filter, allowed_authors)
 
     if not issue or not source_line:
         _handle_no_issues(state, force_execution, lookback_hours)

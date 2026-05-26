@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from string import Template
 
+from . import __version__
 from .config import STATE_FILE
 from .state import log_error
 
@@ -80,6 +81,7 @@ class StatusHandler(BaseHTTPRequestHandler):
             history_count=len(history),
             last_sent_rows=last_sent_rows,
             preview_section=preview_section,
+            version=__version__,
         )
 
         encoded = body.encode("utf-8")

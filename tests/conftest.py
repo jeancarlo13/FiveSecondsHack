@@ -22,6 +22,7 @@ os.environ.update(
         "WORK_DAY_END": "18:00",
         "ALERT_RECIPIENTS": "dev1@example.com,dev2@example.com,",
         "ALERT_MODE": "broadcast",
+        "ISSUE_ONLY_FROM_INVITED": "false",
         "STATUS_PORT": "8080",
         "ISSUE_LOOKBACK_HOURS": "72",
         "OPENAI_MODEL": "gpt-4o-mini",
