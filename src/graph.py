@@ -1,3 +1,15 @@
+"""Microsoft Graph API integration for calendar event delivery.
+
+Uses the OAuth2 Client Credentials flow (application permissions) to obtain
+a short-lived access token from Microsoft Entra ID, then creates a 15-minute
+calendar event in the configured user's mailbox via the Graph ``/events``
+endpoint.  The event body is HTML and carries the full alert content.
+
+Required environment variables:
+    AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET,
+    EMAIL_USERNAME, ALERT_RECIPIENTS,
+    WORK_TIMEZONE, WORK_DAY_START, WORK_DAY_END.
+"""
 import os
 import random
 from datetime import datetime, timedelta
@@ -9,7 +21,14 @@ from .state import log_error
 
 
 def get_graph_access_token():
-    """Requests an OAuth2 access token from Microsoft Entra ID using Client Credentials."""
+    """Request an OAuth2 access token from Microsoft Entra ID.
+
+    Uses the Client Credentials grant with the ``https://graph.microsoft.com/.default``
+    scope.  Credentials are read from environment variables.
+
+    Returns:
+        Access token string on success, or ``None`` if authentication fails.
+    """
     tenant_id = os.getenv("AZURE_TENANT_ID")
     client_id = os.getenv("AZURE_CLIENT_ID")
     client_secret = os.getenv("AZURE_CLIENT_SECRET")
@@ -33,7 +52,24 @@ def get_graph_access_token():
 
 
 def create_graph_calendar_event(subject, html_content, attendees_override=None):
-    """Injects an educational alert event into the target user's corporate calendar."""
+    """Create a 15-minute calendar event in the configured user's Microsoft 365 calendar.
+
+    The event is scheduled at a random time within today's configured work-hour
+    window, at least 5 minutes from now to ensure it appears as upcoming.
+    If the current time is already outside the work window the event is not
+    created and the error is logged.
+
+    Args:
+        subject:            Event subject line (displayed as the calendar entry title).
+        html_content:       Full HTML body of the event (the alert email).
+        attendees_override: Optional list of Graph-formatted attendee dicts.  If
+                            ``None``, attendees are built from ``ALERT_RECIPIENTS``.
+                            Pass an empty list ``[]`` to create an event with no
+                            attendees (used for "no issues" notifications).
+
+    Returns:
+        ``True`` if the event was created successfully, ``False`` otherwise.
+    """
     token = get_graph_access_token()
     if not token:
         return False
@@ -54,7 +90,9 @@ def create_graph_calendar_event(subject, html_content, attendees_override=None):
     window_start = datetime(today.year, today.month, today.day, work_start_h, work_start_m, tzinfo=work_tz)
     window_end   = datetime(today.year, today.month, today.day, work_end_h,   work_end_m,   tzinfo=work_tz)
 
+    # Earliest possible start: max(window_start, now + 5 min) so the event is always in the future.
     earliest = max(window_start, now_local + timedelta(minutes=5))
+    # Latest possible start: window_end minus the event duration (15 min) so it ends within hours.
     latest = window_end - timedelta(minutes=15)
 
     if earliest > latest:
@@ -76,6 +114,7 @@ def create_graph_calendar_event(subject, html_content, attendees_override=None):
     if attendees_override is not None:
         attendees_list = attendees_override
     else:
+        # Build attendee list from the comma-separated ALERT_RECIPIENTS env var.
         attendees_list = []
         recipients_env = os.getenv("ALERT_RECIPIENTS", "")
         if recipients_env:

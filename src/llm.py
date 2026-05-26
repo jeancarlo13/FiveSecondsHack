@@ -1,3 +1,9 @@
+"""LLM integration for AI-assisted code-smell explanation and refactoring.
+
+Loads the prompt template from ``src/prompts/refactor.md`` once at module
+import and reuses it for every call.  Communicates with any OpenAI-compatible
+endpoint (GitHub Models, Azure OpenAI, etc.) via the ``openai`` SDK.
+"""
 import json
 import os
 import re
@@ -8,13 +14,35 @@ from openai import OpenAI
 from .config import SOURCE_CONTEXT_LINES
 from .state import log_error
 
+# Prompt template loaded once at import time to avoid repeated disk reads.
 _PROMPT_TEMPLATE = (Path(__file__).parent / "prompts" / "refactor.md").read_text(encoding="utf-8")
 
 
 def ask_llm_for_refactor(rule_id, sonar_message, source_line, file_path, line_number):
-    """
-    Calls the OpenAI/LLM API to dynamically process the real code smell
-    and generate a precise explanation and refactoring suggestion.
+    """Query the LLM for a structured explanation and refactoring suggestion.
+
+    Formats the prompt template with the supplied issue metadata and source
+    code, then calls the configured OpenAI-compatible endpoint.  The model
+    is expected to return a JSON object; markdown code fences are stripped
+    before parsing.  If inference fails for any reason, a safe fallback dict
+    is returned so the notification pipeline can still continue.
+
+    Args:
+        rule_id:      SonarCloud rule identifier, e.g. ``"python:S1481"``.
+        sonar_message: Human-readable description of the issue as reported by
+                       SonarCloud.
+        source_line:   Raw source code snippet (multiline string) surrounding
+                       the flagged line.
+        file_path:     Component path of the affected file.
+        line_number:   1-based line number of the issue within the file.
+
+    Returns:
+        dict with keys:
+            ``title`` (str), ``explanation`` (str),
+            ``suggested_code`` (str | list), and
+            ``sonar_message_es`` (str, optional).
+        On failure, returns a minimal fallback dict with the original
+        source as ``suggested_code``.
     """
     client = OpenAI()
 
@@ -36,6 +64,7 @@ def ask_llm_for_refactor(rule_id, sonar_message, source_line, file_path, line_nu
             temperature=0.2
         )
         result_text = response.choices[0].message.content.strip()
+        # Strip optional ```json ... ``` fences before JSON parsing.
         if result_text.startswith("```"):
             result_text = re.sub(r'^```(?:json)?\s*\n?', '', result_text)
             result_text = re.sub(r'\n?\s*```\s*$', '', result_text).strip()

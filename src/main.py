@@ -1,3 +1,12 @@
+"""Orchestrator and entry point for the Five Seconds Hack bot.
+
+This module ties all subsystems together and exposes two public functions:
+  - ``run_bot``  — executes one full notification cycle.
+  - ``main``     — CLI entry point; handles ``--serve``, ``--force``, and cron mode.
+
+Module-level helpers (prefixed with ``_``) are intentionally kept private; they
+exist solely to decompose ``run_bot`` into readable, testable units.
+"""
 import html as html_lib
 import json
 import os
@@ -27,8 +36,21 @@ _EMAIL_NO_ISSUES = Template((_TEMPLATE_DIR / "email_no_issues.html").read_text(e
 
 
 def get_local_source_code(component_path, line_number):
-    """
-    Attempts to extract the real source code line directly from the local file system.
+    """Read a source-code window around the flagged line from the local filesystem.
+
+    Tries up to three candidate paths derived from ``component_path``:
+    the raw path, the path relative to cwd, and the path relative to this file.
+    Returns ``None`` if the file cannot be found or read, so the caller can fall
+    back to the SonarCloud API.
+
+    Args:
+        component_path: SonarCloud component key or file path, possibly prefixed
+                        with a project key (e.g. ``"myorg:src/app.py"``).
+        line_number:    1-based line number of the flagged issue.
+
+    Returns:
+        Multiline string containing ``SOURCE_CONTEXT_LINES`` lines above and
+        below ``line_number``, or ``None`` on failure.
     """
     clean_path = component_path.split(":")[-1] if ":" in component_path else component_path
     possible_paths = [
@@ -51,7 +73,19 @@ def get_local_source_code(component_path, line_number):
 
 
 def _compute_days_to_add(weekday):
-    """Returns days to add to skip over the weekend (Fri→Mon = 3, Sat→Mon = 2, else 1)."""
+    """Return the number of calendar days to add to reach the next business day.
+
+    Ensures notifications are always scheduled on weekdays:
+      - Friday (4)  → add 3 days (lands on Monday)
+      - Saturday (5) → add 2 days (lands on Monday)
+      - Any other day → add 1 day
+
+    Args:
+        weekday: Integer weekday from ``datetime.weekday()`` (Monday=0, Sunday=6).
+
+    Returns:
+        Integer number of days to add (1, 2, or 3).
+    """
     if weekday == 4:
         return 3
     if weekday == 5:
@@ -60,9 +94,23 @@ def _compute_days_to_add(weekday):
 
 
 def _fetch_issue_with_source(candidates_history, time_filter):
-    """
-    Polls SonarCloud until an issue with accessible source code is found.
-    Returns (issue, source_line) or (None, None) if none found.
+    """Poll SonarCloud until an issue with accessible source code is found.
+
+    Iterates through candidates from ``fetch_and_select_sonar_issue``, skipping
+    issues whose source code cannot be retrieved (neither locally nor via API).
+    The list of skipped keys grows per call to prevent infinite loops when all
+    accessible issues are exhausted.
+
+    Args:
+        candidates_history: List of issue keys to exclude from selection (already
+                            sent or skipped in previous cycles).
+        time_filter:        ISO-8601 timestamp string passed as ``createdAfter``
+                            to restrict the lookback window.
+
+    Returns:
+        Tuple ``(issue, source_line)`` where ``issue`` is the raw SonarCloud
+        issue dict and ``source_line`` is the plain-text source snippet.
+        Returns ``(None, None)`` when no eligible issue is found.
     """
     skipped_keys = []
     while True:
@@ -91,7 +139,17 @@ def _fetch_issue_with_source(candidates_history, time_filter):
 
 
 def _handle_no_issues(state, force_execution, lookback_hours):
-    """Handles the case when no actionable issue is found in the current cycle."""
+    """Handle the case when no actionable issue is found in the current cycle.
+
+    In forced mode, prints an error and returns immediately without modifying
+    state.  In normal mode, schedules a 1-hour retry, persists the state, and
+    dispatches a "no new issues" calendar event.
+
+    Args:
+        state:            Mutable scheduler state dict (modified in-place for retry).
+        force_execution:  ``True`` if the bot was started with ``--force``.
+        lookback_hours:   Configured lookback window used in the status message.
+    """
     if force_execution:
         print("❌ Integration error: No open Code Smells were found in your SonarCloud project.")
         return
@@ -108,7 +166,24 @@ def _handle_no_issues(state, force_execution, lookback_hours):
 
 def _save_debug_file(issue_key, rule_id, component_path, line_number, sonar_message,
                      source_line, llm_response, html_template, changed_lines):
-    """Persists a JSON debug dump of the current run to tmp/."""
+    """Persist a JSON debug dump of the current run to the ``src/tmp/`` directory.
+
+    The file is named ``five_seconds_hack_<safe_key>_<timestamp>.json`` and
+    contains all inputs and outputs of the run, including the rendered HTML.
+    Write errors are logged but do not abort the notification pipeline.
+
+    Args:
+        issue_key:      SonarCloud issue key (used in the filename).
+        rule_id:        SonarCloud rule identifier.
+        component_path: Affected file path.
+        line_number:    1-based flagged line number.
+        sonar_message:  Raw issue message from SonarCloud.
+        source_line:    Source code snippet used for the notification.
+        llm_response:   Parsed JSON dict returned by the LLM.
+        html_template:  Final rendered HTML of the calendar event body.
+        changed_lines:  Set of 1-based line numbers that differ between
+                        original and suggested code.
+    """
     debug_data = {
         "timestamp": datetime.now().isoformat(),
         "issue_key": issue_key,
@@ -135,7 +210,27 @@ def _save_debug_file(issue_key, rule_id, component_path, line_number, sonar_mess
 
 def _update_state_after_send(state, success, force_execution, issue_key,
                               component_path, rule_id, llm_response, html_template, history):
-    """Persists state and reschedules the next run after a notification dispatch."""
+    """Persist state and reschedule the next run after a notification has been dispatched.
+
+    In forced mode, state is only updated if the event was sent successfully
+    (history + last_sent), and the ``next_execution`` timestamp is left unchanged
+    so the normal cron schedule is not affected.
+
+    In normal mode, ``next_execution`` is always advanced to the next business
+    day at a random time within work hours, regardless of whether the send
+    succeeded, to prevent rapid retry loops.
+
+    Args:
+        state:            Mutable scheduler state dict.
+        success:          ``True`` if the Graph API call succeeded.
+        force_execution:  ``True`` when running in ``--force`` mode.
+        issue_key:        SonarCloud issue key of the dispatched notification.
+        component_path:   Affected file path.
+        rule_id:          SonarCloud rule identifier.
+        llm_response:     Parsed LLM response dict.
+        html_template:    Final rendered HTML stored as a preview in state.
+        history:          Mutable list of already-sent issue keys (updated in-place).
+    """
     if force_execution:
         if success:
             history.append(issue_key)

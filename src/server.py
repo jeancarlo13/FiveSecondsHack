@@ -1,3 +1,13 @@
+"""Lightweight HTTP status server for the Five Seconds Hack dashboard.
+
+Exposes a single-page GET endpoint that reads the persisted state file and
+renders it as HTML.  A POST to ``/force`` spawns a one-shot bot run, bypassing
+the schedule, which is useful for manual testing without restarting the container.
+
+The server binds to ``0.0.0.0`` on the port configured by ``STATUS_PORT``
+(default 8080) and is designed to run as a background thread or separate
+process alongside the scheduler loop.
+"""
 import html as html_lib
 import json
 import os
@@ -11,13 +21,26 @@ from string import Template
 from .config import STATE_FILE
 from .state import log_error
 
+# Status-page HTML template loaded once at import to avoid repeated disk I/O.
 _STATUS_PAGE = Template((Path(__file__).parent / "templates" / "status_page.html").read_text(encoding="utf-8"))
 
 
 class StatusHandler(BaseHTTPRequestHandler):
-    """Serves a simple HTML status page read from the local state file."""
+    """HTTP request handler for the bot's status dashboard.
+
+    Handles two routes:
+      ``GET /``  — renders the HTML status page.
+      ``POST /force`` — spawns an immediate one-shot bot run and redirects back.
+    """
 
     def do_GET(self):
+        """Render and serve the HTML status page.
+
+        Reads the current state from disk, builds the template substitution
+        values, and responds with the fully rendered HTML.  All dynamic values
+        are HTML-escaped before insertion.  Broken pipe errors (e.g. browser
+        cancelled the request) are silently swallowed.
+        """
         try:
             with open(STATE_FILE) as f:
                 state_data = json.loads(f.read().strip() or "{}")
@@ -70,9 +93,15 @@ class StatusHandler(BaseHTTPRequestHandler):
             pass
 
     def log_message(self, fmt, *args):  # suppress default access log
-        pass
+        """Suppress the default ``BaseHTTPRequestHandler`` access log output."""
 
     def do_POST(self):
+        """Handle POST ``/force``: spawn a one-shot bot run and redirect to ``/``.
+
+        Spawns ``python src/main.py --force`` as a detached subprocess so the
+        response returns immediately without waiting for the run to complete.
+        Any spawn error is logged but does not affect the 303 redirect.
+        """
         if self.path == "/force":
             try:
                 subprocess.Popen(
@@ -86,7 +115,12 @@ class StatusHandler(BaseHTTPRequestHandler):
 
 
 def run_status_server():
-    """Starts the HTTP status server (blocking). Run with --serve flag."""
+    """Start the HTTP status server (blocking call).
+
+    Reads ``STATUS_PORT`` from the environment (default ``8080``) and binds
+    to all interfaces (``0.0.0.0``).  This function never returns; use it as
+    a long-running background process started with the ``--serve`` CLI flag.
+    """
     port = int(os.getenv("STATUS_PORT", "8080"))
     server = HTTPServer(("0.0.0.0", port), StatusHandler)
     print(f"\U0001f4ca Status server running at http://localhost:{port}  (Ctrl+C to stop)")
