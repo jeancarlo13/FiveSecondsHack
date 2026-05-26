@@ -1,0 +1,21 @@
+services:
+  five_seconds_hack:
+    build:
+      context: ..
+      dockerfile: container/Dockerfile
+    container_name: five_seconds_hack
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:$${STATUS_PORT:-8080} > /dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    ports:
+      - "${STATUS_PORT:-9080}:${STATUS_PORT:-9080}"
+    volumes:
+      - ../data/sonar_state.json:/app/data/sonar_state.json
+      - ../logs/error.log:/app/logs/error.log
+      - ../tmp:/app/tmp
+    env_file:
+      - ../.env

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Five Seconds Hack — Status</title>
+  <style>
+    body{font-family:'Segoe UI',sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#334155;background:#f8fafc;}
+    h1{color:#4f46e5;margin-bottom:4px;}
+    h2{color:#475569;border-bottom:1px solid #e2e8f0;padding-bottom:6px;margin-top:32px;}
+    table{border-collapse:collapse;width:100%;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);}
+    td{padding:10px 14px;border-bottom:1px solid #f1f5f9;font-size:14px;}
+    td:first-child{font-weight:600;color:#64748b;width:130px;background:#f8fafc;}
+    code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:12px;}
+    .badge{display:inline-block;padding:3px 12px;border-radius:99px;font-size:12px;font-weight:700;}
+    .green{background:#dcfce7;color:#166534;}
+    .blue{background:#eff6ff;color:#2563eb;}
+    .preview{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-top:8px;}
+    .status-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+    .force-form{margin:0;}
+    .force-btn{background:#4f46e5;color:#fff;border:none;padding:4px 16px;border-radius:99px;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.3px;}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;}
+  </style>
+</head>
+<body>
+  <h1>Five Seconds Hack</h1>
+  <div class="status-bar">
+    <span class="badge green">&#9679; Running</span>
+    <form method="POST" action="/force" class="force-form">
+      <button type="submit" class="force-btn">&#9889; Force Send Now</button>
+    </form>
+  </div>
+  <h2>Scheduler</h2>
+  <table>
+    <thead><tr><th class="sr-only" scope="col">Setting</th><th class="sr-only" scope="col">Value</th></tr></thead>
+    <tbody>
+      <tr><td>Next execution</td><td><span class="badge blue">${next_exec_fmt}</span></td></tr>
+      <tr><td>Issues in history</td><td>${history_count}</td></tr>
+    </tbody>
+  </table>
+  <h2>Last Notification Sent</h2>
+  <table>
+    <thead><tr><th class="sr-only" scope="col">Field</th><th class="sr-only" scope="col">Detail</th></tr></thead>
+    <tbody>${last_sent_rows}</tbody>
+  </table>
+  ${preview_section}
+</body>
+</html>
