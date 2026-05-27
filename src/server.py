@@ -46,7 +46,7 @@ class StatusHandler(BaseHTTPRequestHandler):
         try:
             with open(STATE_FILE) as f:
                 state_data = json.loads(f.read().strip() or "{}")
-        except (FileNotFoundError, json.JSONDecodeError):
+        except FileNotFoundError, json.JSONDecodeError:
             state_data = {}
 
         next_exec = state_data.get("next_execution", "")
@@ -55,7 +55,7 @@ class StatusHandler(BaseHTTPRequestHandler):
 
         try:
             next_exec_fmt = datetime.fromisoformat(next_exec).strftime("%Y-%m-%d %H:%M:%S")
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             next_exec_fmt = next_exec or "\u2014"
 
         if last_sent:
@@ -93,7 +93,7 @@ class StatusHandler(BaseHTTPRequestHandler):
         self.end_headers()
         try:
             self.wfile.write(encoded)
-        except (BrokenPipeError, ConnectionResetError):
+        except BrokenPipeError, ConnectionResetError:
             pass
 
     def log_message(self, fmt, *args):  # suppress default access log
