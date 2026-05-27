@@ -5,7 +5,7 @@ Expected environment variables:
     PR_NUMBER   — Pull request number (e.g. "42").
     PR_TITLE    — Title of the merged PR.
     PR_BODY     — Body text of the merged PR (may be empty or multiline).
-    VERSION     — Project version string (e.g. "1.2.0").
+    VERSION     — Project version string (e.g. "1.2.1").
     IMAGE       — Full GHCR image name without tag (e.g. "ghcr.io/owner/repo").
     OUTPUT_FILE — Destination path for the generated Markdown file
                   (default: /tmp/release_body.md).
