@@ -39,8 +39,9 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Validate project version
-        # Skip for any bot-authored PR (sender.type == 'Bot'); bots never bump pyproject.toml.
-        if: ${{ github.event.sender.type != 'Bot' }}
+        # Skip Dependabot PRs: they never bump pyproject.toml and always use a
+        # 'dependabot/' branch prefix — this is more reliable than actor/sender checks.
+        if: ${{ !startsWith(github.head_ref, 'dependabot/') }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
