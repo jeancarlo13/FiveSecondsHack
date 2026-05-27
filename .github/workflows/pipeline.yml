@@ -39,9 +39,8 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Validate project version
-        # Dependabot PRs never bump pyproject.toml — skip version check for them.
-        # ${{ }} forces expression evaluation before YAML parsing (avoids [bot] bracket issue).
-        if: ${{ github.actor != 'dependabot[bot]' }}
+        # Skip for any bot-authored PR (sender.type == 'Bot'); bots never bump pyproject.toml.
+        if: ${{ github.event.sender.type != 'Bot' }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
