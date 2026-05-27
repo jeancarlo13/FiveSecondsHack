@@ -1,6 +1,6 @@
 [project]
 name = "five-seconds-hack"
-version = "1.2.2"
+version = "1.2.3"
 
 [tool.ruff]
 line-length = 120
