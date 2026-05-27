@@ -9,6 +9,7 @@ Reads the current version from pyproject.toml in the working directory and
 compares it against the base TOML passed as a positional argument.
 Exits with a non-zero status and an explanatory message on any validation failure.
 """
+
 import re
 import subprocess
 import sys

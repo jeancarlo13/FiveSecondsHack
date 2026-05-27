@@ -3,6 +3,7 @@
 Each script is loaded at module level via importlib so tests exercise the real
 code path without adding the scripts directory to sys.path permanently.
 """
+
 import importlib.util
 import sys
 from pathlib import Path

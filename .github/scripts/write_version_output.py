@@ -5,6 +5,7 @@ so subsequent workflow steps can reference it via ${{ steps.<id>.outputs.version
 Requires the GITHUB_OUTPUT environment variable to be set (provided automatically
 by the GitHub Actions runner).
 """
+
 import os
 import tomllib
 from pathlib import Path

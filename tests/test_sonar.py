@@ -1,4 +1,5 @@
 """Tests for src/sonar.py."""
+
 from unittest.mock import MagicMock, patch
 
 from src.config import SEVERITY_WEIGHTS
@@ -38,8 +39,7 @@ class TestFetchAndSelectSonarIssue:
         assert issue is None
 
     def test_api_error_returns_none(self):
-        with patch("src.sonar.requests.get", side_effect=Exception("network error")), \
-             patch("src.sonar.log_error"):
+        with patch("src.sonar.requests.get", side_effect=Exception("network error")), patch("src.sonar.log_error"):
             issue = fetch_and_select_sonar_issue([])
         assert issue is None
 
@@ -139,7 +139,6 @@ class TestFetchSourceFromSonar:
         assert result is None
 
     def test_api_exception_returns_none(self):
-        with patch("src.sonar.requests.get", side_effect=Exception("timeout")), \
-             patch("src.sonar.log_error"):
+        with patch("src.sonar.requests.get", side_effect=Exception("timeout")), patch("src.sonar.log_error"):
             result = fetch_source_from_sonar("PROJ:file.cs", 1)
         assert result is None

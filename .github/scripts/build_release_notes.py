@@ -13,6 +13,7 @@ Expected environment variables:
 The generated body uses ``#<number> <title>`` as section header so it mirrors
 the GitHub release title format ``#<number> — <title>`` at a glance.
 """
+
 import os
 from pathlib import Path
 
@@ -27,17 +28,19 @@ def main():
     output = os.environ.get("OUTPUT_FILE", "/tmp/release_body.md")
 
     header = f"## #{pr_number} {pr_title}".rstrip()
-    body = "\n".join([
-        header,
-        "",
-        pr_body,
-        "",
-        "---",
-        "",
-        f"- Versión: `{version}`",
-        f"- Docker image: `{image}:{version}`",
-        "",
-    ])
+    body = "\n".join(
+        [
+            header,
+            "",
+            pr_body,
+            "",
+            "---",
+            "",
+            f"- Versión: `{version}`",
+            f"- Docker image: `{image}:{version}`",
+            "",
+        ]
+    )
     Path(output).write_text(body, encoding="utf-8")
     print(f"Release notes written to {output}")
 

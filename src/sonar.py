@@ -6,6 +6,7 @@ Exposes two public functions:
 
 All requests are authenticated with a Bearer token read from ``SONAR_TOKEN``.
 """
+
 import os
 import random
 

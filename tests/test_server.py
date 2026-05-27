@@ -1,4 +1,5 @@
 """Tests for src/server.py."""
+
 import json
 import os
 from unittest.mock import MagicMock, mock_open, patch
@@ -21,18 +22,20 @@ def _make_handler(path="/", method="GET"):
     return handler
 
 
-_FULL_STATE = json.dumps({
-    "next_execution": "2099-06-01T10:00:00",
-    "history": ["issue1", "issue2"],
-    "last_sent": {
-        "issue_key": "PROJ:src/File.cs",
-        "title": "🚨 Test Alert",
-        "component": "PROJ:src/File.cs",
-        "rule": "csharpsquid:S1234",
-        "sent_at": "2026-05-25T14:00:00",
-        "html": "<p>Preview HTML</p>",
-    },
-})
+_FULL_STATE = json.dumps(
+    {
+        "next_execution": "2099-06-01T10:00:00",
+        "history": ["issue1", "issue2"],
+        "last_sent": {
+            "issue_key": "PROJ:src/File.cs",
+            "title": "🚨 Test Alert",
+            "component": "PROJ:src/File.cs",
+            "rule": "csharpsquid:S1234",
+            "sent_at": "2026-05-25T14:00:00",
+            "html": "<p>Preview HTML</p>",
+        },
+    }
+)
 
 _EMPTY_STATE = json.dumps({})
 
@@ -113,8 +116,10 @@ class TestStatusHandler:
 
     def test_post_force_logs_on_popen_error(self):
         handler = _make_handler(path="/force", method="POST")
-        with patch("src.server.subprocess.Popen", side_effect=OSError("no binary")), \
-             patch("src.server.log_error") as mock_log:
+        with (
+            patch("src.server.subprocess.Popen", side_effect=OSError("no binary")),
+            patch("src.server.log_error") as mock_log,
+        ):
             handler.do_POST()
         mock_log.assert_called_once()
 
@@ -141,8 +146,10 @@ class TestStatusHandler:
 class TestRunStatusServer:
     def test_starts_server_on_configured_port(self):
         mock_server = MagicMock()
-        with patch("src.server.HTTPServer", return_value=mock_server) as mock_cls, \
-             patch.dict(os.environ, {"STATUS_PORT": "9999"}):
+        with (
+            patch("src.server.HTTPServer", return_value=mock_server) as mock_cls,
+            patch.dict(os.environ, {"STATUS_PORT": "9999"}),
+        ):
             run_status_server()
         mock_cls.assert_called_once_with(("0.0.0.0", 9999), StatusHandler)
         mock_server.serve_forever.assert_called_once()
