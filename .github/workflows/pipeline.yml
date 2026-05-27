@@ -129,7 +129,7 @@ jobs:
         run: python .github/scripts/build_release_notes.py
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.version }}
           name: "#${{ github.event.pull_request.number }} — ${{ github.event.pull_request.title }}"
