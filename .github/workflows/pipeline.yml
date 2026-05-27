@@ -32,6 +32,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'requirements*.txt'
 
       - name: Install dependencies
         run: |
@@ -39,8 +41,9 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Validate project version
-        # Dependabot PRs never bump pyproject.toml — skip version check for them.
-        if: github.actor != 'dependabot[bot]'
+        # Skip Dependabot PRs: they never bump pyproject.toml and always use a
+        # 'dependabot/' branch prefix — this is more reliable than actor/sender checks.
+        if: ${{ !startsWith(github.head_ref, 'dependabot/') }}
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
@@ -97,7 +100,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -109,6 +112,8 @@ jobs:
           context: .
           file: container/Dockerfile
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ${{ steps.image.outputs.name }}:${{ steps.version.outputs.version }}
             ${{ steps.image.outputs.name }}:latest
