@@ -4,7 +4,10 @@ version = "1.2.3"
 
 [tool.ruff]
 line-length = 120
-target-version = "py314"
+# ruff 0.15.x incorrectly strips parentheses from `except (A, B):` clauses when
+# target-version is set to py314, producing invalid Python 2 syntax. Keep at
+# py312 until ruff adds proper py314 formatter support.
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
