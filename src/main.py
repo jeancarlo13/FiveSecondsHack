@@ -307,7 +307,7 @@ def _build_alert_payload(issue, source_line):
     try:
         issue_dt = datetime.fromisoformat(raw_creation_date.replace("+0000", "+00:00"))
         issue_created_at = relative_time(issue_dt)
-    except ValueError, AttributeError:
+    except (ValueError, AttributeError):
         issue_created_at = raw_creation_date
 
     print("Consulting AI Model for dynamic explanation and code refactoring...")
