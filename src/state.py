@@ -41,7 +41,7 @@ def load_state():
             if not content:
                 return default_state
             return json.loads(content)
-    except FileNotFoundError, json.JSONDecodeError:
+    except (FileNotFoundError, json.JSONDecodeError):
         return default_state
 
 
