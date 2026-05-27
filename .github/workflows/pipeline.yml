@@ -32,6 +32,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: 'requirements*.txt'
 
       - name: Install dependencies
         run: |
@@ -110,6 +112,8 @@ jobs:
           context: .
           file: container/Dockerfile
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ${{ steps.image.outputs.name }}:${{ steps.version.outputs.version }}
             ${{ steps.image.outputs.name }}:latest
