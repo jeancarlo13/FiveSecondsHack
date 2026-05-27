@@ -131,7 +131,7 @@ STATUS_PORT=9080                       # host port exposed by docker-compose
 
 # Deployment image (for container/docker-compose.yml)
 GHCR_IMAGE=ghcr.io/jeancarlo13/fivesecondshack
-IMAGE_TAG=latest  # override to pin a specific version, e.g. IMAGE_TAG=1.2.1 for rollback
+IMAGE_TAG=latest  # override to pin a specific version, e.g. IMAGE_TAG=1.2.2 for rollback
 ```
 
 ## 📦 Running with Docker (recommended)
@@ -142,7 +142,7 @@ touch data/sonar_state.json logs/error.log
 mkdir -p tmp
 
 # Pull and start the latest released image (detached)
-# Optional: export IMAGE_TAG=1.2.1 to pin a specific version
+# Optional: export IMAGE_TAG=1.2.2 to pin a specific version
 docker compose -f container/docker-compose.yml up -d
 
 # Follow logs
