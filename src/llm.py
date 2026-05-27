@@ -4,6 +4,7 @@ Loads the prompt template from ``src/prompts/refactor.md`` once at module
 import and reuses it for every call.  Communicates with any OpenAI-compatible
 endpoint (GitHub Models, Azure OpenAI, etc.) via the ``openai`` SDK.
 """
+
 import json
 import os
 import re
@@ -61,18 +62,18 @@ def ask_llm_for_refactor(rule_id, sonar_message, source_line, file_path, line_nu
         response = client.chat.completions.create(
             model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.2
+            temperature=0.2,
         )
         result_text = response.choices[0].message.content.strip()
         # Strip optional ```json ... ``` fences before JSON parsing.
         if result_text.startswith("```"):
-            result_text = re.sub(r'^```(?:json)?\s*\n?', '', result_text)
-            result_text = re.sub(r'\n?\s*```\s*$', '', result_text).strip()
+            result_text = re.sub(r"^```(?:json)?\s*\n?", "", result_text)
+            result_text = re.sub(r"\n?\s*```\s*$", "", result_text).strip()
         return json.JSONDecoder(strict=False).decode(result_text)
     except Exception as e:
         log_error(f"LLM Inference failed: {e} | raw_response={result_text[:300] if result_text else 'N/A'}")
         return {
             "title": "\U0001f6a8 Alerta de Calidad de C\u00f3digo",
             "explanation": f"SonarCloud detect\u00f3 una anomal\u00eda en el c\u00f3digo (<strong>{rule_id}</strong>): {sonar_message}.",
-            "suggested_code": source_line
+            "suggested_code": source_line,
         }

@@ -1,4 +1,5 @@
 """Tests for src/render.py."""
+
 from datetime import UTC, datetime, timedelta
 
 from src.render import clean_sonar_source, relative_time, render_code_block
@@ -19,8 +20,8 @@ class TestRenderCodeBlock:
     def test_non_highlighted_line_in_set(self):
         result = render_code_block("a\nb", 1, highlight_lines={2})
         # Line 1 should NOT be highlighted, line 2 should
-        assert "#475569" in result   # normal line num color
-        assert "&#9658;" in result   # flagged marker present for line 2
+        assert "#475569" in result  # normal line num color
+        assert "&#9658;" in result  # flagged marker present for line 2
 
     def test_leading_spaces_become_nbsp(self):
         result = render_code_block("    indented", 1)

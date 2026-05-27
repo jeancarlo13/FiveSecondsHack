@@ -1,8 +1,7 @@
 services:
   five_seconds_hack:
-    build:
-      context: ..
-      dockerfile: container/Dockerfile
+    image: "${GHCR_IMAGE:-ghcr.io/jeancarlo13/fivesecondshack}:${IMAGE_TAG:-latest}"
+    pull_policy: always
     container_name: five_seconds_hack
     restart: unless-stopped
     healthcheck:

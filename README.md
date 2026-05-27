@@ -128,6 +128,10 @@ ISSUE_LOOKBACK_HOURS=72                # how far back to scan for new issues
 
 # Status server
 STATUS_PORT=9080                       # host port exposed by docker-compose
+
+# Deployment image (for container/docker-compose.yml)
+GHCR_IMAGE=ghcr.io/jeancarlo13/fivesecondshack
+IMAGE_TAG=latest  # override to pin a specific version, e.g. IMAGE_TAG=1.2.0 for rollback
 ```
 
 ## 📦 Running with Docker (recommended)
@@ -137,8 +141,9 @@ STATUS_PORT=9080                       # host port exposed by docker-compose
 touch data/sonar_state.json logs/error.log
 mkdir -p tmp
 
-# Build and start (detached)
-docker compose -f container/docker-compose.yml up --build -d
+# Pull and start the latest released image (detached)
+# Optional: export IMAGE_TAG=1.2.0 to pin a specific version
+docker compose -f container/docker-compose.yml up -d
 
 # Follow logs
 docker compose -f container/docker-compose.yml logs -f

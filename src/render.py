@@ -4,6 +4,7 @@ All templates are loaded once at module import.  The code-block template
 lives in ``src/templates/code_block.html`` and is shared across all rendered
 snippets (both the original smell block and the refactored suggestion).
 """
+
 import html as html_lib
 import re
 from datetime import UTC, datetime
@@ -39,17 +40,17 @@ def render_code_block(code, start_line_num, highlight_lines=None, accent_color="
     line_parts = []
     for i, line in enumerate(lines):
         current_num = start_line_num + i
-        is_flagged = (highlight_lines is not None and current_num in highlight_lines)
+        is_flagged = highlight_lines is not None and current_num in highlight_lines
         num_str = str(current_num).rjust(max_width)
         raw = line.rstrip()
-        content_start = len(raw) - len(raw.lstrip('\t '))
-        indent = raw[:content_start].replace('\t', '    ').replace(' ', '&nbsp;')
+        content_start = len(raw) - len(raw.lstrip("\t "))
+        indent = raw[:content_start].replace("\t", "    ").replace(" ", "&nbsp;")
         code_html = indent + html_lib.escape(raw[content_start:])
         if is_flagged:
             line_parts.append(
                 f'<span style="background-color:#1e293b;color:{accent_color};">'
-                f'{html_lib.escape(num_str)} &#9658; {code_html}'
-                f'</span>'
+                f"{html_lib.escape(num_str)} &#9658; {code_html}"
+                f"</span>"
             )
         else:
             line_parts.append(
@@ -72,7 +73,7 @@ def clean_sonar_source(raw_html):
     Returns:
         Plain-text source string with entities decoded.
     """
-    plain = re.sub(r'<[^>]+>', '', raw_html)
+    plain = re.sub(r"<[^>]+>", "", raw_html)
     return html_lib.unescape(plain)
 
 

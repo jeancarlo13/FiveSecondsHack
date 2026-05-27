@@ -1,4 +1,5 @@
 """Tests for src/llm.py."""
+
 import json
 from unittest.mock import MagicMock, patch
 
@@ -6,12 +7,14 @@ from src.llm import ask_llm_for_refactor
 
 
 class TestAskLlmForRefactor:
-    _VALID_RESPONSE = json.dumps({
-        "title": "🚨 Dead Code",
-        "explanation": "Código muerto detectado.",
-        "suggested_code": "int x = 0;",
-        "sonar_message_es": "Variable no utilizada.",
-    })
+    _VALID_RESPONSE = json.dumps(
+        {
+            "title": "🚨 Dead Code",
+            "explanation": "Código muerto detectado.",
+            "suggested_code": "int x = 0;",
+            "sonar_message_es": "Variable no utilizada.",
+        }
+    )
 
     def _mock_openai(self, content):
         client_mock = MagicMock()
@@ -40,15 +43,13 @@ class TestAskLlmForRefactor:
     def test_fallback_on_api_exception(self):
         client_mock = MagicMock()
         client_mock.chat.completions.create.side_effect = Exception("API down")
-        with patch("src.llm.OpenAI", return_value=client_mock), \
-             patch("src.llm.log_error"):
+        with patch("src.llm.OpenAI", return_value=client_mock), patch("src.llm.log_error"):
             result = ask_llm_for_refactor("rule", "msg", "code", "file.cs", 5)
         assert "title" in result
         assert "explanation" in result
 
     def test_fallback_on_json_parse_error(self):
-        with patch("src.llm.OpenAI", return_value=self._mock_openai("not json{")), \
-             patch("src.llm.log_error"):
+        with patch("src.llm.OpenAI", return_value=self._mock_openai("not json{")), patch("src.llm.log_error"):
             result = ask_llm_for_refactor("rule", "msg", "code", "file.cs", 5)
         assert "suggested_code" in result
 

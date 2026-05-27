@@ -10,6 +10,7 @@ Required environment variables:
     EMAIL_USERNAME, ALERT_RECIPIENTS,
     WORK_TIMEZONE, WORK_DAY_START, WORK_DAY_END.
 """
+
 import os
 import random
 from datetime import datetime, timedelta
@@ -39,7 +40,7 @@ def get_graph_access_token():
         "client_id": client_id,
         "scope": "https://graph.microsoft.com/.default",
         "client_secret": client_secret,
-        "grant_type": "client_credentials"
+        "grant_type": "client_credentials",
     }
 
     try:
@@ -76,10 +77,7 @@ def create_graph_calendar_event(subject, html_content, attendees_override=None):
 
     user_email = os.getenv("EMAIL_USERNAME")
     url = f"https://graph.microsoft.com/v1.0/users/{user_email}/events"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
     work_tz = ZoneInfo(os.getenv("WORK_TIMEZONE", "America/Chihuahua"))
     work_start_h, work_start_m = map(int, os.getenv("WORK_DAY_START", "09:00").split(":"))
@@ -88,7 +86,7 @@ def create_graph_calendar_event(subject, html_content, attendees_override=None):
     now_local = datetime.now(work_tz)
     today = now_local.date()
     window_start = datetime(today.year, today.month, today.day, work_start_h, work_start_m, tzinfo=work_tz)
-    window_end   = datetime(today.year, today.month, today.day, work_end_h,   work_end_m,   tzinfo=work_tz)
+    window_end = datetime(today.year, today.month, today.day, work_end_h, work_end_m, tzinfo=work_tz)
 
     # Earliest possible start: max(window_start, now + 5 min) so the event is always in the future.
     earliest = max(window_start, now_local + timedelta(minutes=5))
@@ -98,8 +96,8 @@ def create_graph_calendar_event(subject, html_content, attendees_override=None):
     if earliest > latest:
         log_error(
             f"Event not created: outside of work hours "
-            f"({os.getenv('WORK_DAY_START','09:00')}\u2013{os.getenv('WORK_DAY_END','18:00')} "
-            f"{os.getenv('WORK_TIMEZONE','America/Chihuahua')})"
+            f"({os.getenv('WORK_DAY_START', '09:00')}\u2013{os.getenv('WORK_DAY_END', '18:00')} "
+            f"{os.getenv('WORK_TIMEZONE', 'America/Chihuahua')})"
         )
         return False
 
@@ -109,7 +107,7 @@ def create_graph_calendar_event(subject, html_content, attendees_override=None):
 
     tz_name = os.getenv("WORK_TIMEZONE", "America/Chihuahua")
     start_time = candidate_start.strftime("%Y-%m-%dT%H:%M:%S")
-    end_time   = event_end.strftime("%Y-%m-%dT%H:%M:%S")
+    end_time = event_end.strftime("%Y-%m-%dT%H:%M:%S")
 
     if attendees_override is not None:
         attendees_list = attendees_override
@@ -120,32 +118,22 @@ def create_graph_calendar_event(subject, html_content, attendees_override=None):
         if recipients_env:
             emails = [email.strip() for email in recipients_env.split(",") if email.strip()]
             for email in emails:
-                attendees_list.append({
-                    "emailAddress": {
-                        "address": email,
-                        "name": email.split("@")[0].replace(".", " ").title()
-                    },
-                    "type": "required"
-                })
+                attendees_list.append(
+                    {
+                        "emailAddress": {"address": email, "name": email.split("@")[0].replace(".", " ").title()},
+                        "type": "required",
+                    }
+                )
 
     payload = {
         "subject": subject,
-        "body": {
-            "contentType": "html",
-            "content": html_content
-        },
-        "start": {
-            "dateTime": start_time,
-            "timeZone": tz_name
-        },
-        "end": {
-            "dateTime": end_time,
-            "timeZone": tz_name
-        },
+        "body": {"contentType": "html", "content": html_content},
+        "start": {"dateTime": start_time, "timeZone": tz_name},
+        "end": {"dateTime": end_time, "timeZone": tz_name},
         "isReminderOn": True,
         "reminderMinutesBeforeStart": 0,
         "showAs": "free",
-        "attendees": attendees_list
+        "attendees": attendees_list,
     }
 
     try:

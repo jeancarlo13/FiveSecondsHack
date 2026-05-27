@@ -1,4 +1,5 @@
 """Tests for src/graph.py."""
+
 import os
 from unittest.mock import MagicMock, patch
 
@@ -15,16 +16,14 @@ class TestGetGraphAccessToken:
         assert token == "tok123"
 
     def test_returns_none_on_error(self):
-        with patch("src.graph.requests.post", side_effect=Exception("auth failed")), \
-             patch("src.graph.log_error"):
+        with patch("src.graph.requests.post", side_effect=Exception("auth failed")), patch("src.graph.log_error"):
             token = get_graph_access_token()
         assert token is None
 
     def test_http_error_returns_none(self):
         resp = MagicMock()
         resp.raise_for_status.side_effect = Exception("401")
-        with patch("src.graph.requests.post", return_value=resp), \
-             patch("src.graph.log_error"):
+        with patch("src.graph.requests.post", return_value=resp), patch("src.graph.log_error"):
             token = get_graph_access_token()
         assert token is None
 
@@ -45,21 +44,29 @@ class TestCreateGraphCalendarEvent:
 
     def test_returns_false_outside_work_hours(self):
         # Set a work window guaranteed to be in the past (00:00–00:01 UTC)
-        with self._mock_token(), \
-             patch.dict(os.environ, {"WORK_DAY_START": "00:00", "WORK_DAY_END": "00:01", "WORK_TIMEZONE": "UTC"}), \
-             patch("src.graph.log_error"):
+        with (
+            self._mock_token(),
+            patch.dict(os.environ, {"WORK_DAY_START": "00:00", "WORK_DAY_END": "00:01", "WORK_TIMEZONE": "UTC"}),
+            patch("src.graph.log_error"),
+        ):
             result = create_graph_calendar_event("subj", "content")
         assert result is False
 
     def test_returns_true_on_success(self):
-        with self._mock_token(), self._mock_post_success(), \
-             patch.dict(os.environ, {"WORK_DAY_START": "00:00", "WORK_DAY_END": "23:59", "WORK_TIMEZONE": "UTC"}):
+        with (
+            self._mock_token(),
+            self._mock_post_success(),
+            patch.dict(os.environ, {"WORK_DAY_START": "00:00", "WORK_DAY_END": "23:59", "WORK_TIMEZONE": "UTC"}),
+        ):
             result = create_graph_calendar_event("subj", "content")
         assert result is True
 
     def test_uses_attendees_override(self):
-        with self._mock_token(), self._mock_post_success(), \
-             patch.dict(os.environ, {"WORK_DAY_START": "00:00", "WORK_DAY_END": "23:59", "WORK_TIMEZONE": "UTC"}):
+        with (
+            self._mock_token(),
+            self._mock_post_success(),
+            patch.dict(os.environ, {"WORK_DAY_START": "00:00", "WORK_DAY_END": "23:59", "WORK_TIMEZONE": "UTC"}),
+        ):
             result = create_graph_calendar_event("subj", "html", attendees_override=[])
         assert result is True
 
@@ -72,14 +79,19 @@ class TestCreateGraphCalendarEvent:
             resp.raise_for_status = MagicMock()
             return resp
 
-        with self._mock_token(), \
-             patch("src.graph.requests.post", side_effect=capture_post), \
-             patch.dict(os.environ, {
-                 "ALERT_RECIPIENTS": "a@x.com,b@x.com",
-                 "WORK_DAY_START": "00:00",
-                 "WORK_DAY_END": "23:59",
-                 "WORK_TIMEZONE": "UTC",
-             }):
+        with (
+            self._mock_token(),
+            patch("src.graph.requests.post", side_effect=capture_post),
+            patch.dict(
+                os.environ,
+                {
+                    "ALERT_RECIPIENTS": "a@x.com,b@x.com",
+                    "WORK_DAY_START": "00:00",
+                    "WORK_DAY_END": "23:59",
+                    "WORK_TIMEZONE": "UTC",
+                },
+            ),
+        ):
             create_graph_calendar_event("subj", "html")
 
         emails = [a["emailAddress"]["address"] for a in captured["payload"]["attendees"]]
@@ -89,20 +101,28 @@ class TestCreateGraphCalendarEvent:
     def test_returns_false_on_api_error(self):
         resp = MagicMock()
         resp.raise_for_status.side_effect = Exception("Graph 500")
-        with self._mock_token(), \
-             patch("src.graph.requests.post", return_value=resp), \
-             patch.dict(os.environ, {"WORK_DAY_START": "00:00", "WORK_DAY_END": "23:59", "WORK_TIMEZONE": "UTC"}), \
-             patch("src.graph.log_error"):
+        with (
+            self._mock_token(),
+            patch("src.graph.requests.post", return_value=resp),
+            patch.dict(os.environ, {"WORK_DAY_START": "00:00", "WORK_DAY_END": "23:59", "WORK_TIMEZONE": "UTC"}),
+            patch("src.graph.log_error"),
+        ):
             result = create_graph_calendar_event("subj", "html")
         assert result is False
 
     def test_empty_alert_recipients_env(self):
-        with self._mock_token(), self._mock_post_success(), \
-             patch.dict(os.environ, {
-                 "ALERT_RECIPIENTS": "",
-                 "WORK_DAY_START": "00:00",
-                 "WORK_DAY_END": "23:59",
-                 "WORK_TIMEZONE": "UTC",
-             }):
+        with (
+            self._mock_token(),
+            self._mock_post_success(),
+            patch.dict(
+                os.environ,
+                {
+                    "ALERT_RECIPIENTS": "",
+                    "WORK_DAY_START": "00:00",
+                    "WORK_DAY_END": "23:59",
+                    "WORK_TIMEZONE": "UTC",
+                },
+            ),
+        ):
             result = create_graph_calendar_event("subj", "html")
         assert result is True

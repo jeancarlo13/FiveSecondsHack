@@ -8,6 +8,7 @@ The server binds to ``0.0.0.0`` on the port configured by ``STATUS_PORT``
 (default 8080) and is designed to run as a background thread or separate
 process alongside the scheduler loop.
 """
+
 import html as html_lib
 import json
 import os
@@ -60,11 +61,11 @@ class StatusHandler(BaseHTTPRequestHandler):
         if last_sent:
             _dash = "—"
             last_sent_rows = (
-                f'<tr><td>Issue Key</td><td><code>{html_lib.escape(last_sent.get("issue_key", _dash))}</code></td></tr>'
-                f'<tr><td>Title</td><td>{html_lib.escape(last_sent.get("title", _dash))}</td></tr>'
+                f"<tr><td>Issue Key</td><td><code>{html_lib.escape(last_sent.get('issue_key', _dash))}</code></td></tr>"
+                f"<tr><td>Title</td><td>{html_lib.escape(last_sent.get('title', _dash))}</td></tr>"
                 f'<tr><td>File</td><td><code style="font-size:11px;">{html_lib.escape(last_sent.get("component", _dash))}</code></td></tr>'
-                f'<tr><td>Rule</td><td><code>{html_lib.escape(last_sent.get("rule", _dash))}</code></td></tr>'
-                f'<tr><td>Sent at</td><td>{html_lib.escape(last_sent.get("sent_at", _dash))}</td></tr>'
+                f"<tr><td>Rule</td><td><code>{html_lib.escape(last_sent.get('rule', _dash))}</code></td></tr>"
+                f"<tr><td>Sent at</td><td>{html_lib.escape(last_sent.get('sent_at', _dash))}</td></tr>"
             )
             last_sent_preview = last_sent.get("html", "")
         else:
@@ -73,7 +74,8 @@ class StatusHandler(BaseHTTPRequestHandler):
 
         preview_section = (
             f'<h2>Last Notification Preview</h2><div class="preview">{last_sent_preview}</div>'
-            if last_sent_preview else ""
+            if last_sent_preview
+            else ""
         )
 
         body = _STATUS_PAGE.safe_substitute(
@@ -106,9 +108,7 @@ class StatusHandler(BaseHTTPRequestHandler):
         """
         if self.path == "/force":
             try:
-                subprocess.Popen(
-                    [sys.executable, os.path.abspath(__file__), "--force"]
-                )
+                subprocess.Popen([sys.executable, os.path.abspath(__file__), "--force"])
             except Exception as e:
                 log_error(f"Force trigger from status endpoint failed: {e}")
         self.send_response(303)

@@ -1,4 +1,5 @@
 """Tests for src/state.py."""
+
 import json
 from unittest.mock import mock_open, patch
 
