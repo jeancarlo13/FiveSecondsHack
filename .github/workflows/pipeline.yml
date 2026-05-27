@@ -39,6 +39,8 @@ jobs:
           pip install -r requirements.txt -r requirements-dev.txt
 
       - name: Validate project version
+        # Dependabot PRs never bump pyproject.toml — skip version check for them.
+        if: github.actor != 'dependabot[bot]'
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
