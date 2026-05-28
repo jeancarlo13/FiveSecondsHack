@@ -124,7 +124,7 @@ jobs:
       - name: Build release notes
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_TITLE: ${{ steps.version.outputs.version }}
           PR_BODY: ${{ github.event.pull_request.body }}
           VERSION: ${{ steps.version.outputs.version }}
           IMAGE: ${{ steps.image.outputs.name }}
