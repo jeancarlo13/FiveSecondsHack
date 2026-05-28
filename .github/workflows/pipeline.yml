@@ -124,7 +124,7 @@ jobs:
       - name: Build release notes
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE: ${{ steps.version.outputs.version }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           VERSION: ${{ steps.version.outputs.version }}
           IMAGE: ${{ steps.image.outputs.name }}
@@ -135,6 +135,6 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          name: "#${{ github.event.pull_request.number }} — ${{ github.event.pull_request.title }}"
+          name: "${{ steps.version.outputs.version }}"
           body_path: /tmp/release_body.md
           target_commitish: ${{ github.event.pull_request.merge_commit_sha }}
