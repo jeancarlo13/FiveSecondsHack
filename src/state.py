@@ -15,6 +15,7 @@ import json
 import logging
 import sys
 from datetime import datetime
+from pathlib import Path
 
 import structlog
 
@@ -43,6 +44,7 @@ _formatter = structlog.stdlib.ProcessorFormatter(
 
 _pkg_logger = logging.getLogger("fsh")
 if not _pkg_logger.handlers:
+    Path(LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
     _fh = logging.FileHandler(LOG_FILE, mode="a", encoding="utf-8")
     _fh.setFormatter(_formatter)
     _ch = logging.StreamHandler(sys.stdout)
