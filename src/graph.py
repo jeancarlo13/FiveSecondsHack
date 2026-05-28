@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from .state import log_error
+from .state import log_error, log_info
 
 
 def get_graph_access_token():
@@ -139,7 +139,8 @@ def create_graph_calendar_event(subject, html_content, attendees_override=None):
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=10)
         response.raise_for_status()
-        print(f"Successfully injected Graph Calendar Event: {subject}")
+        attendee_addresses = [a["emailAddress"]["address"] for a in attendees_list]
+        log_info(f"Graph Calendar Event created: '{subject}' → attendees: {attendee_addresses}")
         return True
     except Exception as e:
         log_error(f"Graph API Failed to create calendar event: {e}")

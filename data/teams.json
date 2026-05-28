@@ -1,0 +1,5 @@
+{
+  "lead1@company.com": ["dev1@company.com", "lead2@company.com"],
+  "lead2@company.com": ["dev2@company.com", "dev3@company.com"],
+  "dev1@company.com": ["dev4@company.com", "dev5@company.com"]
+}

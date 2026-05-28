@@ -21,7 +21,7 @@ from string import Template
 
 from . import __version__
 from .config import STATE_FILE
-from .state import log_error
+from .state import log_error, log_info
 
 # Status-page HTML template loaded once at import to avoid repeated disk I/O.
 _STATUS_PAGE = Template((Path(__file__).parent / "templates" / "status_page.html").read_text(encoding="utf-8"))
@@ -125,5 +125,5 @@ def run_status_server():
     """
     port = int(os.getenv("STATUS_PORT", "8080"))
     server = HTTPServer(("0.0.0.0", port), StatusHandler)
-    print(f"\U0001f4ca Status server running at http://localhost:{port}  (Ctrl+C to stop)")
+    log_info(f"📊 Status server running at http://localhost:{port}  (Ctrl+C to stop)")
     server.serve_forever()

@@ -15,7 +15,8 @@ The bot detects open Code Smells from SonarCloud, fetches the real source contex
 - **Source Context:** Fetches the actual code lines locally first, then falls back to SonarCloud's `/api/sources/show` API.
 - **AI-Assisted Refactoring:** Queries an LLM (GitHub Models / OpenAI) for a structured JSON response with title, explanation, and suggested code.
 - **Alert Mode Toggle:** `ALERT_MODE=broadcast` (default) sends one event to all recipients; `ALERT_MODE=individual` fetches a **different** SonarCloud issue per recipient and dispatches a separate calendar event to each one.
-- **Recipient-Aware Issue Selection:** `ISSUE_ONLY_FROM_INVITED=true` restricts selection to issues authored by invited recipients; when `false`, any author is eligible.
+- **Recipient-Aware Issue Selection:** `ISSUE_ONLY_FROM_INVITED=true` restricts selection to issues authored by invited recipients. Matching is done by full email, local-part, or substring — so GitHub noreply addresses (`12345+username-org@users.noreply.github.com`) are resolved correctly to their corporate email counterparts.
+- **Team Hierarchy & Fallback:** `data/teams.json` defines a multi-level org chart (`leader → [members]`). When `TEAM_FALLBACK_ENABLED=true` and a member has no own issues, the bot walks up the tree recursively until it finds an ancestor with an issue and groups the member as an attendee of that ancestor's event (one shared event instead of two separate ones).
 - **Microsoft Graph Calendar Event:** Creates a 15-minute calendar event at a random slot within configurable work hours, always in the future.
 - **Business Day Scheduling:** Next execution is always the next business day (skips weekends); Friday schedules to Monday.
 - **Status HTTP Endpoint:** Lightweight built-in web server (`--serve`) showing scheduler state, last notification sent, and a live HTML preview.
@@ -54,7 +55,7 @@ server.py  ──► GET  /       → HTML dashboard
 src/
   __init__.py          Package marker with module docstring
   config.py            Constants: file paths, severity weights, context lines
-  state.py             load_state / save_state / log_error
+  state.py             load_state / save_state / log_error / log_info
   sonar.py             SonarCloud API: fetch & select issues, fetch source
   llm.py               OpenAI integration: prompt formatting + JSON parsing
   graph.py             Microsoft Graph: OAuth2 token + calendar event creation
@@ -83,6 +84,7 @@ container/
   docker-compose.yml   Port mapping, volume mounts, healthcheck, env_file
 data/
   sonar_state.json     Runtime state (not committed)
+  teams.json           Team hierarchy for fallback routing (mock data committed; replace with real emails)
 logs/
   error.log            Append-only error log (not committed)
 tmp/
@@ -119,6 +121,11 @@ ALERT_MODE=broadcast
 
 # When true, only issues authored by invited recipients are eligible
 ISSUE_ONLY_FROM_INVITED=false
+
+# Team hierarchy for fallback (data/teams.json)
+# Format: { "leader@company.com": ["member1@company.com", "member2@company.com"] }
+# Supports multi-level trees; members walk up recursively until an ancestor with an issue is found
+TEAM_FALLBACK_ENABLED=false             # when true, members without own issues share their leader's event
 
 # Scheduling
 WORK_TIMEZONE=America/Chihuahua        # IANA timezone name
@@ -191,6 +198,7 @@ pytest
 The test suite uses `unittest.mock` to patch all external calls (SonarCloud,
 OpenAI, Microsoft Graph, filesystem).  `conftest.py` sets all required
 environment variables and fixes `sys.argv` before any module is imported.
+Structlog output is asserted with pytest's `caplog` fixture (logger `"fsh"`).
 
 ## 🔁 Scheduling Algorithm
 
@@ -209,5 +217,6 @@ environment variables and fixes `sys.argv` before any module is imported.
 | `No open Code Smells` with `--force` | All issues are outside the `ISSUE_LOOKBACK_HOURS` window | Increase `ISSUE_LOOKBACK_HOURS` or check SonarCloud |
 | `LLM Inference failed` | Invalid `OPENAI_API_KEY` or quota exceeded | Check the key and model availability |
 | `Microsoft Entra ID Authentication failed` | Wrong `AZURE_*` credentials or missing Graph permissions | Verify app registration and `Calendars.ReadWrite` permission |
-| In `individual` mode, only N-1 events sent | SonarCloud ran out of unique issues for the last recipient | Increase `ISSUE_LOOKBACK_HOURS` or reduce recipient count |
+| In `individual` mode, some recipients skip | SonarCloud ran out of unique issues or `ISSUE_ONLY_FROM_INVITED=true` and no matching author | Increase `ISSUE_LOOKBACK_HOURS`, set `TEAM_FALLBACK_ENABLED=true`, or disable `ISSUE_ONLY_FROM_INVITED` |
+| GitHub noreply emails not matching recipients | `ISSUE_ONLY_FROM_INVITED=true` with no corporate email match | Substring matching handles `12345+username-org@users.noreply.github.com` → `username@company.com` automatically |
 | `400 Bad Request` on calendar event | Attendee list malformed (e.g. plain string instead of object) | Upgrade to the latest version of `graph.py` / `main.py` |
