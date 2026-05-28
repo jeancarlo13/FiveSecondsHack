@@ -54,8 +54,7 @@ def render_code_block(code, start_line_num, highlight_lines=None, accent_color="
             )
         else:
             line_parts.append(
-                f'<span class="fsh-num">{html_lib.escape(num_str)}  </span>'
-                f'<span class="fsh-code">{code_html}</span>'
+                f'<span class="fsh-num">{html_lib.escape(num_str)}  </span><span class="fsh-code">{code_html}</span>'
             )
     return _CODE_BLOCK.safe_substitute(lines="<br>".join(line_parts))
 
