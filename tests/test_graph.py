@@ -1,9 +1,20 @@
 """Tests for src/graph.py."""
 
 import os
+from datetime import datetime as _real_dt
 from unittest.mock import MagicMock, patch
+from zoneinfo import ZoneInfo
 
 from src.graph import create_graph_calendar_event, get_graph_access_token
+
+
+class _NoonDatetime(_real_dt):
+    """Subclass of datetime that always returns 2026-05-27 12:00 UTC from now()."""
+
+    @classmethod
+    def now(cls, tz=None):  # type: ignore[override]
+        fixed = _real_dt(2026, 5, 27, 12, 0, 0, tzinfo=ZoneInfo("UTC"))
+        return fixed.astimezone(tz) if tz else fixed
 
 
 class TestGetGraphAccessToken:
@@ -56,6 +67,7 @@ class TestCreateGraphCalendarEvent:
         with (
             self._mock_token(),
             self._mock_post_success(),
+            patch("src.graph.datetime", _NoonDatetime),
             patch.dict(os.environ, {"WORK_DAY_START": "00:00", "WORK_DAY_END": "23:59", "WORK_TIMEZONE": "UTC"}),
         ):
             result = create_graph_calendar_event("subj", "content")
@@ -65,6 +77,7 @@ class TestCreateGraphCalendarEvent:
         with (
             self._mock_token(),
             self._mock_post_success(),
+            patch("src.graph.datetime", _NoonDatetime),
             patch.dict(os.environ, {"WORK_DAY_START": "00:00", "WORK_DAY_END": "23:59", "WORK_TIMEZONE": "UTC"}),
         ):
             result = create_graph_calendar_event("subj", "html", attendees_override=[])
@@ -82,6 +95,7 @@ class TestCreateGraphCalendarEvent:
         with (
             self._mock_token(),
             patch("src.graph.requests.post", side_effect=capture_post),
+            patch("src.graph.datetime", _NoonDatetime),
             patch.dict(
                 os.environ,
                 {
@@ -114,6 +128,7 @@ class TestCreateGraphCalendarEvent:
         with (
             self._mock_token(),
             self._mock_post_success(),
+            patch("src.graph.datetime", _NoonDatetime),
             patch.dict(
                 os.environ,
                 {

@@ -25,7 +25,26 @@ def _normalize_author(value):
 
 
 def _candidate_matches_allowed_authors(issue, allowed_authors):
-    """Return True when an issue author matches one of the allowed recipients."""
+    """Return True when an issue author matches one of the allowed recipients.
+
+    Applies four checks in order, stopping at the first match:
+    1. Exact email match (``author == recipient``).
+    2. Local-part exact match (``author.split('@')[0] == recipient``).
+    3. Local-part of the author is found literally in any allowed email's local-part.
+    4. Any allowed local-part is a substring of the author's local-part — this
+       resolves GitHub noreply addresses such as
+       ``12345+username-org@users.noreply.github.com`` to their corporate
+       counterpart ``username@company.com``.
+
+    Args:
+        issue:           Raw SonarCloud issue dict; the ``author`` field is used.
+        allowed_authors: List of recipient email strings.  When empty or ``None``,
+                         all issues are considered eligible.
+
+    Returns:
+        ``True`` if the author matches at least one allowed recipient, ``False``
+        otherwise.
+    """
     if not allowed_authors:
         return True
 
@@ -37,7 +56,9 @@ def _candidate_matches_allowed_authors(issue, allowed_authors):
         return True
 
     issue_local_part = issue_author.split("@")[0]
-    return issue_local_part in allowed_authors
+    if issue_local_part in allowed_authors:
+        return True
+    return any(a.split("@")[0] in issue_local_part for a in allowed_authors)
 
 
 def fetch_and_select_sonar_issue(history, created_after=None, allowed_authors=None):

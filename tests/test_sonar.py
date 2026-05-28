@@ -110,6 +110,24 @@ class TestFetchAndSelectSonarIssue:
             issue = fetch_and_select_sonar_issue([], allowed_authors=["dev1@example.com"])
         assert issue is None
 
+    def test_matches_github_noreply_email(self):
+        issues = [
+            {"key": "A", "severity": "MAJOR", "author": "68394537+ccorral1-tenco@users.noreply.github.com"},
+            {"key": "B", "severity": "MAJOR", "author": "other@example.com"},
+        ]
+        with patch("src.sonar.requests.get", return_value=self._mock_response(issues)):
+            issue = fetch_and_select_sonar_issue([], allowed_authors=["ccorral@tenco.mx"])
+        assert issue is not None
+        assert issue["key"] == "A"
+
+    def test_no_false_positive_different_name(self):
+        issues = [
+            {"key": "A", "severity": "MAJOR", "author": "68394537+ccorral1-tenco@users.noreply.github.com"},
+        ]
+        with patch("src.sonar.requests.get", return_value=self._mock_response(issues)):
+            issue = fetch_and_select_sonar_issue([], allowed_authors=["other@tenco.mx"])
+        assert issue is None
+
 
 class TestFetchSourceFromSonar:
     def test_returns_cleaned_source(self):

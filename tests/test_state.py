@@ -1,27 +1,35 @@
 """Tests for src/state.py."""
 
 import json
+import logging
 from unittest.mock import mock_open, patch
 
-from src.config import LOG_FILE, STATE_FILE
-from src.state import load_state, log_error, save_state
+from src.config import STATE_FILE
+from src.state import load_state, log_error, log_info, save_state
 
 
 class TestLogError:
-    def test_writes_message_to_log(self):
-        mock_file = mock_open()
-        with patch("builtins.open", mock_file):
+    def test_logs_error_event(self, caplog):
+        with caplog.at_level(logging.ERROR, logger="fsh"):
             log_error("something went wrong")
-        handle = mock_file()
-        written = handle.write.call_args[0][0]
-        assert "something went wrong" in written
-        assert "[" in written  # timestamp bracket
+        assert "something went wrong" in caplog.text
 
-    def test_appends_mode(self):
-        mock_file = mock_open()
-        with patch("builtins.open", mock_file):
+    def test_log_error_level(self, caplog):
+        with caplog.at_level(logging.ERROR, logger="fsh"):
             log_error("err")
-        mock_file.assert_called_once_with(LOG_FILE, "a")
+        assert caplog.records[0].levelno == logging.ERROR
+
+
+class TestLogInfo:
+    def test_logs_info_event(self, caplog):
+        with caplog.at_level(logging.INFO, logger="fsh"):
+            log_info("operation completed")
+        assert "operation completed" in caplog.text
+
+    def test_log_info_level(self, caplog):
+        with caplog.at_level(logging.INFO, logger="fsh"):
+            log_info("step done")
+        assert caplog.records[0].levelno == logging.INFO
 
 
 class TestLoadState:

@@ -100,7 +100,39 @@ tmp/                  # Debug JSON dumps per run
 
 ---
 
-## Testing
+## Logging
+
+- Use **structlog** (`structlog>=24.0.0`) backed by the stdlib `logging` module. Never use bare `print()` for operational output.
+- The logger is configured once at import time in `src/state.py` under the `"fsh"` namespace. Two public wrappers are exported:
+  - `log_error(message)` — ERROR level, written to `logs/error.log` and echoed to stdout.
+  - `log_info(message)` — INFO level, written to `logs/error.log` and echoed to stdout.
+- Import them with a relative import inside `src/`:
+  ```python
+  from .state import log_error, log_info
+  ```
+  In `src/main.py` (absolute imports after sys.path fix):
+  ```python
+  from src.state import log_error, log_info
+  ```
+- Output format (ISO-8601 timestamp + level label):
+  ```
+  2026-05-27T12:00:00.000000Z [info     ] Graph Calendar Event created: 'subject'
+  2026-05-27T12:00:00.000000Z [error    ] LLM Inference failed: ...
+  ```
+- In tests, capture log output with pytest's `caplog` fixture instead of mocking `builtins.open`:
+  ```python
+  def test_logs_error_event(self, caplog):
+      with caplog.at_level(logging.ERROR, logger="fsh"):
+          log_error("something went wrong")
+      assert "something went wrong" in caplog.text
+  ```
+- To suppress file/console output in tests while asserting on other behavior, patch `src.<module>.log_error` or `src.<module>.log_info` as a no-op:
+  ```python
+  with patch("src.graph.log_error"):
+      result = create_graph_calendar_event(...)
+  ```
+
+---
 
 - **pytest** + **pytest-cov** with minimum **95% coverage** (`--cov-fail-under=95`).
 - `pytest.ini`: `testpaths = tests`, `addopts = --cov=src --cov-report=term-missing --cov-fail-under=95`.

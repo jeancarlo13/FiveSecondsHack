@@ -50,3 +50,9 @@ def _env_bool(name, default=False):
 
 # If enabled, only issues authored by invited recipients are eligible.
 ISSUE_ONLY_FROM_INVITED = _env_bool("ISSUE_ONLY_FROM_INVITED", False)
+
+# Path to the JSON file that maps team leaders to their members.
+TEAMS_FILE = "data/teams.json"
+
+# If enabled, members without own issues receive a shared event with their nearest ancestor that has one.
+TEAM_FALLBACK_ENABLED = _env_bool("TEAM_FALLBACK_ENABLED", False)

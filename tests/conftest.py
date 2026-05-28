@@ -26,6 +26,7 @@ os.environ.update(
         "STATUS_PORT": "8080",
         "ISSUE_LOOKBACK_HOURS": "72",
         "OPENAI_MODEL": "gpt-4o-mini",
+        "TEAM_FALLBACK_ENABLED": "false",
     }
 )
 

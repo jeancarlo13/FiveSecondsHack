@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 import src.main as m  # noqa: F401
-from src.main import get_local_source_code, main, run_bot
+from src.main import _find_fallback_leader, _load_teams, get_local_source_code, main, run_bot
 
 _SAMPLE_ISSUE = {
     "key": "PROJ:src/File.cs",
@@ -606,3 +606,154 @@ class TestRunBotIndividualMode:
 
         assert result is False
         mock_save.assert_not_called()
+
+
+class TestLoadTeams:
+    def test_returns_empty_on_missing_file(self):
+        with patch("builtins.open", side_effect=FileNotFoundError()):
+            result = _load_teams()
+        assert result == {}
+
+    def test_returns_teams_from_file(self):
+        teams_data = {"leader@x.com": ["member@x.com"]}
+        with patch("builtins.open", mock_open(read_data=json.dumps(teams_data))):
+            result = _load_teams()
+        assert result == teams_data
+
+    def test_returns_empty_on_json_error(self):
+        with patch("builtins.open", mock_open(read_data="not-json")), patch("src.main.log_error"):
+            result = _load_teams()
+        assert result == {}
+
+
+class TestFindFallbackLeader:
+    def test_returns_none_on_cycle(self):
+        cyclic_map = {"a@x.com": "b@x.com", "b@x.com": "a@x.com"}
+        result = _find_fallback_leader("a@x.com", cyclic_map, {})
+        assert result is None
+
+    def test_returns_ancestor_two_levels_up(self):
+        member_to_leader = {"child@x.com": "parent@x.com", "parent@x.com": "grandparent@x.com"}
+        resolved = {"grandparent@x.com": ("issue", "source")}
+        result = _find_fallback_leader("child@x.com", member_to_leader, resolved)
+        assert result == "grandparent@x.com"
+
+    def test_returns_none_when_no_ancestor_with_issue(self):
+        member_to_leader = {"child@x.com": "parent@x.com"}
+        result = _find_fallback_leader("child@x.com", member_to_leader, {})
+        assert result is None
+
+
+class TestRunBotIndividualModeFallback:
+    _PAST_STATE = {"next_execution": "2000-01-01T00:00:00", "history": []}
+
+    _ISSUE_A = {
+        "key": "PROJ:src/FileA.cs",
+        "component": "PROJ:src/FileA.cs",
+        "line": 5,
+        "message": "Unused variable 'a'",
+        "rule": "csharpsquid:S1481",
+        "severity": "MAJOR",
+        "creationDate": "2026-05-01T12:00:00+0000",
+    }
+
+    def _llm_response(self):
+        return {
+            "title": "🚨 Test",
+            "explanation": "Explanation.",
+            "suggested_code": "int x = 0; // fixed",
+            "sonar_message_es": "Variable no usada.",
+        }
+
+    def test_individual_fallback_groups_member_with_leader(self):
+        """Member without own issue is grouped into leader's calendar event."""
+        teams = {"leader@x.com": ["member@x.com"]}
+
+        def fetch_side(history, created_after=None, allowed_authors=None):
+            return dict(self._ISSUE_A) if allowed_authors == ["leader@x.com"] else None
+
+        with (
+            patch.dict(os.environ, {"ALERT_RECIPIENTS": "leader@x.com,member@x.com"}),
+            patch("src.main.ALERT_MODE", "individual"),
+            patch("src.main.TEAM_FALLBACK_ENABLED", True),
+            patch("src.main.ISSUE_ONLY_FROM_INVITED", True),
+            patch("src.main.load_state", return_value=dict(self._PAST_STATE)),
+            patch("src.main.fetch_and_select_sonar_issue", side_effect=fetch_side),
+            patch("src.main.get_local_source_code", return_value="int x = 1;"),
+            patch("src.main.ask_llm_for_refactor", return_value=self._llm_response()),
+            patch("src.main.create_graph_calendar_event", return_value=True) as mock_send,
+            patch("src.main._load_teams", return_value=teams),
+            patch("src.main.save_state"),
+            patch("src.main.os.makedirs"),
+            patch("builtins.open", mock_open()),
+        ):
+            result = run_bot(force_execution=False)
+
+        assert result is True
+        assert mock_send.call_count == 1
+        override = mock_send.call_args.kwargs.get("attendees_override")
+        assert override is not None and len(override) == 2
+        addresses = {a["emailAddress"]["address"] for a in override}
+        assert {"leader@x.com", "member@x.com"} == addresses
+
+    def test_individual_fallback_recursive_two_levels(self):
+        """fgonzalez (L2) and scalderon (L3) without issues both fall back to jchavez (L1)."""
+        teams = {
+            "jchavez@x.com": ["fgonzalez@x.com"],
+            "fgonzalez@x.com": ["scalderon@x.com"],
+        }
+
+        def fetch_side(history, created_after=None, allowed_authors=None):
+            return dict(self._ISSUE_A) if allowed_authors == ["jchavez@x.com"] else None
+
+        with (
+            patch.dict(os.environ, {"ALERT_RECIPIENTS": "jchavez@x.com,fgonzalez@x.com,scalderon@x.com"}),
+            patch("src.main.ALERT_MODE", "individual"),
+            patch("src.main.TEAM_FALLBACK_ENABLED", True),
+            patch("src.main.ISSUE_ONLY_FROM_INVITED", True),
+            patch("src.main.load_state", return_value=dict(self._PAST_STATE)),
+            patch("src.main.fetch_and_select_sonar_issue", side_effect=fetch_side),
+            patch("src.main.get_local_source_code", return_value="int x = 1;"),
+            patch("src.main.ask_llm_for_refactor", return_value=self._llm_response()),
+            patch("src.main.create_graph_calendar_event", return_value=True) as mock_send,
+            patch("src.main._load_teams", return_value=teams),
+            patch("src.main.save_state"),
+            patch("src.main.os.makedirs"),
+            patch("builtins.open", mock_open()),
+        ):
+            result = run_bot(force_execution=False)
+
+        assert result is True
+        assert mock_send.call_count == 1
+        override = mock_send.call_args.kwargs.get("attendees_override")
+        assert override is not None and len(override) == 3
+        addresses = {a["emailAddress"]["address"] for a in override}
+        assert {"jchavez@x.com", "fgonzalez@x.com", "scalderon@x.com"} == addresses
+
+    def test_individual_fallback_disabled_still_warns(self):
+        """With TEAM_FALLBACK_ENABLED=False, members without issues just get skipped."""
+
+        def fetch_side(history, created_after=None, allowed_authors=None):
+            return dict(self._ISSUE_A) if allowed_authors == ["a@ex.com"] else None
+
+        with (
+            patch.dict(os.environ, {"ALERT_RECIPIENTS": "a@ex.com,b@ex.com"}),
+            patch("src.main.ALERT_MODE", "individual"),
+            patch("src.main.TEAM_FALLBACK_ENABLED", False),
+            patch("src.main.ISSUE_ONLY_FROM_INVITED", True),
+            patch("src.main.load_state", return_value=dict(self._PAST_STATE)),
+            patch("src.main.fetch_and_select_sonar_issue", side_effect=fetch_side),
+            patch("src.main.get_local_source_code", return_value="int x = 1;"),
+            patch("src.main.ask_llm_for_refactor", return_value=self._llm_response()),
+            patch("src.main.create_graph_calendar_event", return_value=True) as mock_send,
+            patch("src.main.save_state"),
+            patch("src.main.os.makedirs"),
+            patch("builtins.open", mock_open()),
+        ):
+            result = run_bot(force_execution=False)
+
+        assert result is True
+        assert mock_send.call_count == 1
+        override = mock_send.call_args.kwargs.get("attendees_override")
+        assert override is not None and len(override) == 1
+        assert override[0]["emailAddress"]["address"] == "a@ex.com"

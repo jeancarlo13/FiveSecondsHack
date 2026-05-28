@@ -23,13 +23,13 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.config import ALERT_MODE, ISSUE_ONLY_FROM_INVITED, SOURCE_CONTEXT_LINES
+from src.config import ALERT_MODE, ISSUE_ONLY_FROM_INVITED, SOURCE_CONTEXT_LINES, TEAM_FALLBACK_ENABLED, TEAMS_FILE
 from src.graph import create_graph_calendar_event
 from src.llm import ask_llm_for_refactor
 from src.render import relative_time, render_code_block
 from src.server import run_status_server
 from src.sonar import fetch_and_select_sonar_issue, fetch_source_from_sonar
-from src.state import load_state, log_error, save_state
+from src.state import load_state, log_error, log_info, save_state
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
 _EMAIL_ALERT = Template((_TEMPLATE_DIR / "email_alert.html").read_text(encoding="utf-8"))
@@ -127,15 +127,15 @@ def _fetch_issue_with_source(candidates_history, time_filter, allowed_authors=No
         component_path = issue.get("component", "Unknown File")
         line_number = issue.get("line", 0)
 
-        print(f"Reading real source code for {component_path} at line {line_number}...")
+        log_info(f"Reading source code for {component_path} at line {line_number}...")
         source_line = get_local_source_code(component_path, line_number)
 
         if not source_line:
-            print("Local file not found, fetching source from SonarCloud API...")
+            log_info(f"Local file not found, fetching {component_path} from SonarCloud API...")
             source_line = fetch_source_from_sonar(component_path, line_number)
 
         if not source_line:
-            print(f"⚠️ Could not retrieve source code for {component_path}:{line_number}. Trying next issue...")
+            log_info(f"⚠️ Could not retrieve source code for {component_path}:{line_number}. Trying next issue...")
             log_error(f"Could not retrieve source code for {component_path}:{line_number}. Skipping to next candidate.")
             skipped_keys.append(issue_key)
             continue
@@ -156,7 +156,7 @@ def _handle_no_issues(state, force_execution, lookback_hours):
         lookback_hours:   Configured lookback window used in the status message.
     """
     if force_execution:
-        print("❌ Integration error: No open Code Smells were found in your SonarCloud project.")
+        log_info("❌ Integration error: No open Code Smells were found in your SonarCloud project.")
         return
 
     now = datetime.now()
@@ -164,7 +164,7 @@ def _handle_no_issues(state, force_execution, lookback_hours):
     state["next_execution"] = next_check.isoformat()
     save_state(state)
     msg = f"No new issues found in the last {lookback_hours}h window. Next scan scheduled for {next_check.strftime('%Y-%m-%d %H:%M:%S')}."
-    print(f"✅ {msg}")
+    log_info(f"✅ {msg}")
     no_issues_html = _EMAIL_NO_ISSUES.safe_substitute(msg=html_lib.escape(msg))
     create_graph_calendar_event("✅ Five Seconds Hack: No new issues", no_issues_html, attendees_override=[])
 
@@ -219,7 +219,7 @@ def _save_debug_file(
         os.makedirs(debug_dir, exist_ok=True)
         with open(debug_file, "w", encoding="utf-8") as f:
             json.dump(debug_data, f, indent=2, ensure_ascii=False)
-        print(f"📁 Debug file saved: {debug_file}")
+        log_info(f"📁 Debug file saved: {debug_file}")
     except Exception as e:
         log_error(f"Failed to save debug file: {e}")
 
@@ -261,7 +261,7 @@ def _update_state_after_send(
             }
             state["history"] = history[-50:]
             save_state(state)
-        print("Forced test run completed successfully. Internal timers left unchanged.")
+        log_info("Forced test run completed successfully. Internal timers left unchanged.")
         return
 
     now = datetime.now()
@@ -310,7 +310,7 @@ def _build_alert_payload(issue, source_line):
     except (ValueError, AttributeError):
         issue_created_at = raw_creation_date
 
-    print("Consulting AI Model for dynamic explanation and code refactoring...")
+    log_info("Consulting AI Model for dynamic explanation and code refactoring...")
     llm_response = ask_llm_for_refactor(rule_id, sonar_message, source_line, component_path, line_number)
 
     raw_start = max(1, line_number - SOURCE_CONTEXT_LINES)
@@ -364,11 +364,227 @@ def _build_alert_payload(issue, source_line):
     }
 
 
+def _load_teams():
+    """Load the team hierarchy from ``TEAMS_FILE`` (default: ``data/teams.json``).
+
+    The file format is a JSON object mapping a leader email to a list of member
+    emails, supporting arbitrarily deep trees through nested entries::
+
+        {
+          "lead@company.com": ["mid@company.com"],
+          "mid@company.com":  ["dev1@company.com", "dev2@company.com"]
+        }
+
+    Returns:
+        Parsed dict, or an empty dict if the file is missing or unreadable.
+    """
+    try:
+        with open(TEAMS_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        log_error(f"Failed to load teams config from {TEAMS_FILE}: {e}")
+        return {}
+
+
+def _make_attendee(email):
+    """Build a Microsoft Graph API attendee object from an email address.
+
+    The display name is derived from the local part of the email by replacing
+    dots with spaces and title-casing the result (e.g. ``john.doe@x.com`` →
+    ``"John Doe"``).
+
+    Args:
+        email: Recipient email address string.
+
+    Returns:
+        Dict with ``emailAddress`` and ``type`` keys as expected by the
+        Graph ``/v1.0/me/events`` endpoint.
+    """
+    return {
+        "emailAddress": {
+            "address": email,
+            "name": email.split("@")[0].replace(".", " ").title(),
+        },
+        "type": "required",
+    }
+
+
+def _find_fallback_leader(recipient, member_to_leader, resolved, visited=None):
+    """Walk up the team tree to find the nearest ancestor that has a resolved issue.
+
+    Traverses the ``member_to_leader`` map recursively.  A ``visited`` set
+    prevents infinite loops caused by cycles in the config.
+
+    Args:
+        recipient:       Email of the member who has no own issue.
+        member_to_leader: Flat dict mapping each member email to its direct leader
+                          email (inverted from the ``teams.json`` structure).
+        resolved:        Dict of emails that already have an assigned issue
+                         (keys are the issue owners).
+        visited:         Set of emails visited in the current recursion path;
+                         created automatically on the first call.
+
+    Returns:
+        Email of the closest ancestor present in ``resolved``, or ``None`` if no
+        such ancestor exists or a cycle is detected.
+    """
+    if visited is None:
+        visited = set()
+    if recipient in visited:
+        return None
+    visited.add(recipient)
+    leader = member_to_leader.get(recipient)
+    if not leader:
+        return None
+    if leader in resolved:
+        return leader
+    return _find_fallback_leader(leader, member_to_leader, resolved, visited)
+
+
+def _resolve_issues_per_recipient(recipients, candidates_history, time_filter):
+    """Fetch one distinct SonarCloud issue per recipient (first pass).
+
+    Args:
+        recipients:         Ordered list of recipient email strings.
+        candidates_history: Issue keys to exclude (already sent or skipped).
+        time_filter:        ISO-8601 ``createdAfter`` timestamp string.
+
+    Returns:
+        Tuple ``(resolved, used_keys)`` where ``resolved`` maps each recipient
+        email to ``(issue, source_line)`` and ``used_keys`` lists the consumed
+        issue keys in order.
+    """
+    resolved = {}
+    used_keys = []
+    for recipient in recipients:
+        allowed_authors = [recipient] if ISSUE_ONLY_FROM_INVITED else None
+        issue, source_line = _fetch_issue_with_source(candidates_history + used_keys, time_filter, allowed_authors)
+        if issue and source_line:
+            resolved[recipient] = (issue, source_line)
+            used_keys.append(issue.get("key"))
+    return resolved, used_keys
+
+
+def _build_event_groups(recipients, resolved, member_to_leader):
+    """Map each recipient to a calendar-event owner and build attendee lists.
+
+    Recipients with a resolved issue own their own event.  Recipients without
+    one are attached to their nearest resolved ancestor via
+    ``_find_fallback_leader``; if no ancestor exists they are skipped with a
+    warning.
+
+    Args:
+        recipients:       Ordered list of recipient email strings.
+        resolved:         Dict mapping recipient email → ``(issue, source_line)``.
+        member_to_leader: Flat dict mapping member email → direct leader email.
+
+    Returns:
+        Dict mapping issue-owner email → list of attendee emails (owner first).
+    """
+    event_groups: dict = {}
+    for recipient in recipients:
+        if recipient in resolved:
+            event_groups.setdefault(recipient, [recipient])
+        else:
+            ancestor = _find_fallback_leader(recipient, member_to_leader, resolved)
+            if ancestor:
+                event_groups.setdefault(ancestor, [ancestor])
+                event_groups[ancestor].append(recipient)
+            else:
+                log_info(f"⚠️ No unique issue available for {recipient}, skipping.")
+    return event_groups
+
+
+def _dispatch_event_group(issue_owner, attendees, resolved):
+    """Build payload and create one calendar event for an issue owner and attendees.
+
+    Args:
+        issue_owner: Email of the recipient whose resolved issue drives the event.
+        attendees:   List of email strings to invite (owner always first).
+        resolved:    Dict mapping recipient email → ``(issue, source_line)``.
+
+    Returns:
+        Tuple ``(success, payload)`` where ``success`` is the Graph API bool
+        result and ``payload`` is the dict from ``_build_alert_payload``.
+    """
+    issue, source_line = resolved[issue_owner]
+    payload = _build_alert_payload(issue, source_line)
+    success = create_graph_calendar_event(
+        payload["subject"],
+        payload["html"],
+        attendees_override=[_make_attendee(a) for a in attendees],
+    )
+    _save_debug_file(
+        payload["issue_key"],
+        payload["rule_id"],
+        payload["component_path"],
+        payload["line_number"],
+        payload["sonar_message"],
+        source_line,
+        payload["llm_response"],
+        payload["html"],
+        payload["changed"],
+    )
+    return success, payload
+
+
+def _save_individual_state(state, history, used_keys, any_success, last_payload, force_execution):
+    """Persist scheduler state after individual-mode dispatch.
+
+    In forced mode, updates history and ``last_sent`` only on success then
+    returns without changing ``next_execution``.  In normal mode always
+    advances ``next_execution`` to a random slot on the next business day.
+
+    Args:
+        state:           Mutable scheduler state dict.
+        history:         Mutable list of already-sent issue keys.
+        used_keys:       Issue keys consumed this cycle (appended on success).
+        any_success:     ``True`` if at least one event was dispatched.
+        last_payload:    Payload dict of the last successful dispatch, or ``None``.
+        force_execution: ``True`` when running with ``--force``.
+
+    Returns:
+        ``any_success`` unchanged.
+    """
+    if any_success and last_payload:
+        history.extend(used_keys)
+        state["last_sent"] = {
+            "issue_key": last_payload["issue_key"],
+            "component": last_payload["component_path"],
+            "rule": last_payload["rule_id"],
+            "title": last_payload["llm_response"].get("title", ""),
+            "sent_at": datetime.now().isoformat(),
+            "html": last_payload["html"],
+        }
+        if force_execution:
+            state["history"] = history[-50:]
+            save_state(state)
+
+    if force_execution:
+        log_info("Forced test run completed successfully. Internal timers left unchanged.")
+        return any_success
+
+    now = datetime.now()
+    next_slot = (now + timedelta(days=_compute_days_to_add(now.weekday()))).replace(
+        hour=random.randint(9, 17),
+        minute=random.randint(0, 59),
+        second=0,
+    )
+    state["next_execution"] = next_slot.isoformat()
+    state["history"] = history[-50:]
+    save_state(state)
+    return any_success
+
+
 def _run_individual_mode(state, force_execution, candidates_history, time_filter, lookback_hours):
     """Execute one notification cycle in individual mode.
 
     Fetches a distinct SonarCloud issue per recipient and dispatches a separate
-    calendar event to each one.
+    calendar event to each one.  When ``TEAM_FALLBACK_ENABLED`` is set,
+    recipients without their own issue are grouped into their nearest ancestor's
+    event instead of being skipped.
 
     Args:
         state:              Mutable scheduler state dict.
@@ -382,92 +598,27 @@ def _run_individual_mode(state, force_execution, candidates_history, time_filter
         otherwise.
     """
     recipients = [r.strip() for r in os.getenv("ALERT_RECIPIENTS", "").split(",") if r.strip()]
-
     if not recipients:
         _handle_no_issues(state, force_execution, lookback_hours)
         return False
 
-    history = state["history"]
-    used_keys = []
-    results = []  # list of (success, payload) per recipient
+    resolved, used_keys = _resolve_issues_per_recipient(recipients, candidates_history, time_filter)
 
-    for recipient in recipients:
-        allowed_authors = [recipient] if ISSUE_ONLY_FROM_INVITED else None
-        issue, source_line = _fetch_issue_with_source(candidates_history + used_keys, time_filter, allowed_authors)
-        if not issue or not source_line:
-            print(f"⚠️ No unique issue available for {recipient}, skipping.")
-            continue
+    member_to_leader = {}
+    if TEAM_FALLBACK_ENABLED:
+        teams = _load_teams()
+        member_to_leader = {m: leader for leader, members in teams.items() for m in members}
 
-        payload = _build_alert_payload(issue, source_line)
-        attendee = {
-            "emailAddress": {
-                "address": recipient,
-                "name": recipient.split("@")[0].replace(".", " ").title(),
-            },
-            "type": "required",
-        }
-        success = create_graph_calendar_event(payload["subject"], payload["html"], attendees_override=[attendee])
-        _save_debug_file(
-            payload["issue_key"],
-            payload["rule_id"],
-            payload["component_path"],
-            payload["line_number"],
-            payload["sonar_message"],
-            source_line,
-            payload["llm_response"],
-            payload["html"],
-            payload["changed"],
-        )
-        used_keys.append(payload["issue_key"])
-        results.append((success, payload))
-
-    if not results:
+    event_groups = _build_event_groups(recipients, resolved, member_to_leader)
+    if not event_groups:
         _handle_no_issues(state, force_execution, lookback_hours)
         return False
 
-    # Update state once after the loop
+    results = [_dispatch_event_group(owner, attendees, resolved) for owner, attendees in event_groups.items()]
     any_success = any(s for s, _ in results)
-    last_successful_payload = next((p for s, p in reversed(results) if s), None)
+    last_payload = next((p for s, p in reversed(results) if s), None)
 
-    if force_execution:
-        if any_success and last_successful_payload:
-            for key in used_keys:
-                history.append(key)
-            state["last_sent"] = {
-                "issue_key": last_successful_payload["issue_key"],
-                "component": last_successful_payload["component_path"],
-                "rule": last_successful_payload["rule_id"],
-                "title": last_successful_payload["llm_response"].get("title", ""),
-                "sent_at": datetime.now().isoformat(),
-                "html": last_successful_payload["html"],
-            }
-            state["history"] = history[-50:]
-            save_state(state)
-        print("Forced test run completed successfully. Internal timers left unchanged.")
-        return any_success
-
-    now = datetime.now()
-    days_to_add = _compute_days_to_add(now.weekday())
-    next_slot = (now + timedelta(days=days_to_add)).replace(
-        hour=random.randint(9, 17),
-        minute=random.randint(0, 59),
-        second=0,
-    )
-    if any_success and last_successful_payload:
-        for key in used_keys:
-            history.append(key)
-        state["last_sent"] = {
-            "issue_key": last_successful_payload["issue_key"],
-            "component": last_successful_payload["component_path"],
-            "rule": last_successful_payload["rule_id"],
-            "title": last_successful_payload["llm_response"].get("title", ""),
-            "sent_at": now.isoformat(),
-            "html": last_successful_payload["html"],
-        }
-    state["next_execution"] = next_slot.isoformat()
-    state["history"] = history[-50:]
-    save_state(state)
-    return any_success
+    return _save_individual_state(state, state["history"], used_keys, any_success, last_payload, force_execution)
 
 
 def run_bot(force_execution=False):
@@ -482,7 +633,7 @@ def run_bot(force_execution=False):
         state["history"] = []
 
     next_dt = datetime.fromisoformat(state["next_execution"])
-    print(f"🤖 Five Seconds Hack | Next scheduled execution: {next_dt.strftime('%Y-%m-%d %H:%M:%S')} local time")
+    log_info(f"🤖 Five Seconds Hack | Next scheduled execution: {next_dt.strftime('%Y-%m-%d %H:%M:%S')} local time")
 
     if not force_execution and datetime.now() < next_dt:
         return None  # not yet time
@@ -492,7 +643,7 @@ def run_bot(force_execution=False):
     lookback_hours = int(os.getenv("ISSUE_LOOKBACK_HOURS", "72"))
     time_filter = (datetime.now(UTC) - timedelta(hours=lookback_hours)).strftime("%Y-%m-%dT%H:%M:%S+0000")
 
-    print(
+    log_info(
         f"{'⚠️  [FORCED TEST - history bypassed, time window still active]' if force_execution else '🔄 [CRON CYCLE]'} Fetching and selecting issue from SonarCloud..."
     )
 
@@ -554,7 +705,7 @@ def main():
         state.setdefault("next_execution", datetime.now().isoformat())
         state.setdefault("history", [])
         next_dt = datetime.fromisoformat(state["next_execution"])
-        print(f"🤖 Five Seconds Hack | Next scheduled execution: {next_dt.strftime('%Y-%m-%d %H:%M:%S')} local time")
+        log_info(f"🤖 Five Seconds Hack | Next scheduled execution: {next_dt.strftime('%Y-%m-%d %H:%M:%S')} local time")
         run_status_server()
         sys.exit(0)
 
