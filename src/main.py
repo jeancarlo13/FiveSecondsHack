@@ -32,6 +32,7 @@ from src.sonar import fetch_and_select_sonar_issue, fetch_source_from_sonar
 from src.state import load_state, log_error, log_info, save_state
 
 _TEMPLATE_DIR = Path(__file__).parent / "templates"
+_STYLES = (_TEMPLATE_DIR / "styles.css").read_text(encoding="utf-8")
 _EMAIL_ALERT = Template((_TEMPLATE_DIR / "email_alert.html").read_text(encoding="utf-8"))
 _EMAIL_NO_ISSUES = Template((_TEMPLATE_DIR / "email_no_issues.html").read_text(encoding="utf-8"))
 
@@ -165,7 +166,7 @@ def _handle_no_issues(state, force_execution, lookback_hours):
     save_state(state)
     msg = f"No new issues found in the last {lookback_hours}h window. Next scan scheduled for {next_check.strftime('%Y-%m-%d %H:%M:%S')}."
     log_info(f"✅ {msg}")
-    no_issues_html = _EMAIL_NO_ISSUES.safe_substitute(msg=html_lib.escape(msg))
+    no_issues_html = _EMAIL_NO_ISSUES.safe_substitute(msg=html_lib.escape(msg), styles=_STYLES)
     create_graph_calendar_event("✅ Five Seconds Hack: No new issues", no_issues_html, attendees_override=[])
 
 
@@ -337,6 +338,7 @@ def _build_alert_payload(issue, source_line):
     )
 
     html_template = _EMAIL_ALERT.safe_substitute(
+        styles=_STYLES,
         title=llm_response.get("title", "🚨 Code Quality Alert"),
         component_path=component_path,
         line_number=line_number,
@@ -575,7 +577,7 @@ def _save_individual_state(state, history, used_keys, any_success, last_payload,
     state["next_execution"] = next_slot.isoformat()
     state["history"] = history[-50:]
     save_state(state)
-    return any_success
+    return True
 
 
 def _run_individual_mode(state, force_execution, candidates_history, time_filter, lookback_hours):

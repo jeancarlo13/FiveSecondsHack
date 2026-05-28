@@ -14,6 +14,7 @@ services:
       - "${STATUS_PORT:-9080}:${STATUS_PORT:-9080}"
     volumes:
       - ../data/sonar_state.json:/app/data/sonar_state.json
+      - ../data/teams.json:/app/data/teams.json
       - ../logs/error.log:/app/logs/error.log
       - ../tmp:/app/tmp
     env_file:
