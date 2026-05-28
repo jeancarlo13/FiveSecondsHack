@@ -25,7 +25,7 @@ You are generating a pull request description for the current branch of the **fi
 
 ## Title conventions
 
-- Format: `type(scope): summary in imperative mood` (max 72 chars)
+- Format: `type(scope): summary in imperative mood` 
 - Types: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`, `ci`
 - Scope: affected module or feature (e.g. `logging`, `teams`, `graph`)
 - Examples:

@@ -48,14 +48,14 @@ def render_code_block(code, start_line_num, highlight_lines=None, accent_color="
         code_html = indent + html_lib.escape(raw[content_start:])
         if is_flagged:
             line_parts.append(
-                f'<span style="background-color:#1e293b;color:{accent_color};">'
+                f'<span class="fsh-flagged" style="color:{accent_color};">'
                 f"{html_lib.escape(num_str)} &#9658; {code_html}"
                 f"</span>"
             )
         else:
             line_parts.append(
-                f'<span style="color:#475569;">{html_lib.escape(num_str)}  </span>'
-                f'<span style="color:#f8fafc;">{code_html}</span>'
+                f'<span class="fsh-num">{html_lib.escape(num_str)}  </span>'
+                f'<span class="fsh-code">{code_html}</span>'
             )
     return _CODE_BLOCK.safe_substitute(lines="<br>".join(line_parts))
 

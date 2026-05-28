@@ -20,7 +20,7 @@ class TestRenderCodeBlock:
     def test_non_highlighted_line_in_set(self):
         result = render_code_block("a\nb", 1, highlight_lines={2})
         # Line 1 should NOT be highlighted, line 2 should
-        assert "#475569" in result  # normal line num color
+        assert 'class="fsh-num"' in result  # normal line number class
         assert "&#9658;" in result  # flagged marker present for line 2
 
     def test_leading_spaces_become_nbsp(self):
