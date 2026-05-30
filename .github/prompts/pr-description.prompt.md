@@ -22,6 +22,7 @@ You are generating a pull request description for the current branch of the **fi
 - Propose **3 alternative PR titles** using conventional commit format (`type(scope): summary`) before the description body. The user will pick one.
 - Save the final output to `tmp/pr-<short-slug>-<YYYYMMDD>.md` (use today's date).
 - Do **not** include the alternatives block inside the saved file — only the chosen/best title goes in the file header as an H1.
+- **Never hard-wrap prose lines.** Each paragraph or list item must be a single unbroken line. GitHub reflows text in the UI; manual line breaks at 80 chars create unwanted `<br>` in the rendered output.
 
 ## Title conventions
 

@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -62,6 +63,17 @@ jobs:
 
       - name: Tests and coverage
         run: pytest
+
+      - name: Check for outdated dependencies
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTPUT_FILE: ${{ runner.temp }}/outdated_deps.md
+        run: |
+          python .github/scripts/check_outdated_deps.py
+          if [ -s "$OUTPUT_FILE" ]; then
+            gh pr comment ${{ github.event.pull_request.number }} --body-file "$OUTPUT_FILE"
+          fi
 
   # ── CD ──────────────────────────────────────────────────────────────────────
   # Runs only when a PR is merged into the default branch.
