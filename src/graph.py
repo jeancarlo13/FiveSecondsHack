@@ -16,9 +16,15 @@ import random
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import css_inline
 import requests
 
 from .state import log_error, log_info
+
+# Inlines <style> block CSS classes into style="" attributes before the HTML is
+# sent to the Graph API. Google Calendar strips <style> tags and renders their
+# text content as visible text, so CSS must be fully inline at delivery time.
+_INLINER = css_inline.CSSInliner(load_remote_stylesheets=False)
 
 
 def get_graph_access_token():
@@ -75,6 +81,7 @@ def create_graph_calendar_event(subject, html_content, attendees_override=None):
     if not token:
         return False
 
+    html_content = _INLINER.inline(html_content)
     user_email = os.getenv("EMAIL_USERNAME")
     url = f"https://graph.microsoft.com/v1.0/users/{user_email}/events"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
