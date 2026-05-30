@@ -2,4 +2,4 @@ requests==2.34.2
 python-dotenv==1.2.2
 openai>=2.38.0
 structlog>=24.0.0
-css-inline>=0.20.2
+css-inline>=0.14.2
